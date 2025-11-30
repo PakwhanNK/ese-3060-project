@@ -403,14 +403,14 @@ def main(run, start):
         return m[indices] * x + b[indices]
 
     # fixed start / end, variable peak
-    fixed_start = 0.2
-    fixed_end = 0.07
+    fixed_peak = 0.23  # choose your favourite peak LR
+    fixed_end = 0.07  # fixed final LR
 
     lr_schedule = triangle(
         total_train_steps,
-        start=fixed_start,
+        start=start,
         end=fixed_end,
-        peak=peak,
+        peak=fixed_peak,
     )
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -499,16 +499,18 @@ if __name__ == "__main__":
 
     print_columns(logging_columns_list, is_head=True)
 
-    fixed_start = 0.2
+    fixed_peak = 0.15
     fixed_end = 0.07
 
-    # peaks: 0.15, 0.18, 0.21, ..., 0.39
-    peaks = [0.15 + 0.03 * i for i in range(9)]
+    # 🔁 Different starting LRs (min starting point)
+    starts = [0.05 + 0.05 * i for i in range(8)]   # 0.05 to 0.40
 
-    for peak in peaks:
+    for start in starts:
         print("\n" + "=" * 80)
-        print(f"RUNNING CONFIG: peak={peak:.2f} "
-              f"(start={fixed_start}, end={fixed_end})")
+        print(
+            f"RUNNING CONFIG: start={start:.2f} "
+            f"(peak={fixed_peak}, end={fixed_end})"
+        )
         print("=" * 80)
 
         accs = []
@@ -516,9 +518,9 @@ if __name__ == "__main__":
         best_time = float("inf")
         best_run = None
 
-        # how many runs per peak (change 10 → 25 if you want)
+        # how many runs per start (change 10 if you want more)
         for run in range(10):
-            acc, time_sec = main(run, peak)
+            acc, time_sec = main(run, start)
             accs.append(acc)
             times.append(time_sec)
 
@@ -526,7 +528,7 @@ if __name__ == "__main__":
                 best_time = time_sec
                 best_run = run
                 print(
-                    f"\n🎉 NEW RECORD! peak={peak:.2f}, Run {run}: "
+                    f"\nNEW RECORD! start={start:.2f}, Run {run}: "
                     f"{time_sec:.4f}s (accuracy: {acc:.4f})\n"
                 )
 
