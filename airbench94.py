@@ -384,7 +384,7 @@ def main(run):
         warmdown_steps = total_train_steps - warmup_steps
         if step < warmup_steps:
             frac = step / warmup_steps
-            return 0.2 * (1 - frac) + 1.0 * frac
+            return 0.3 * (1 - frac) + 1.0 * frac
         else:
             frac = (step - warmup_steps) / warmdown_steps
             return 1.0 * (1 - frac) + 0.07 * frac
