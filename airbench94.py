@@ -348,7 +348,7 @@ class Muon(Optimizer):
                     g_orth = zeropower_via_newtonschulz5(g, steps=ns_steps)
                 elif g.ndim > 2:
                     original_shape = g.shape
-                    g_2d = g.view(g.size(0), -1)
+                    g_2d = g.reshape(g.size(0), -1)
                     g_orth = zeropower_via_newtonschulz5(g_2d, steps=ns_steps)
                     g_orth = g_orth.view(original_shape)
                 else:
