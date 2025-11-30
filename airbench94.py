@@ -349,7 +349,7 @@ def evaluate(model, loader, tta_level=0):
 #                Training                  #
 ############################################
 
-def main(run, triangle_params):
+def main(run, peak):
 
     batch_size = hyp['opt']['batch_size']
     epochs = hyp['opt']['train_epochs']
@@ -401,6 +401,10 @@ def main(run, triangle_params):
         indices = torch.sum(torch.ge(x[:, None], xp[None, :]), 1) - 1
         indices = torch.clamp(indices, 0, len(m) - 1)
         return m[indices] * x + b[indices]
+
+    # fixed start / end, variable peak
+    fixed_start = 0.2
+    fixed_end = 0.07
 
     lr_schedule = triangle(total_train_steps, start=0.2, end=0.07, peak=0.23)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
@@ -488,18 +492,16 @@ if __name__ == "__main__":
 
     print_columns(logging_columns_list, is_head=True)
 
-    # Different triangle configs to try
-    triangle_configs = {
-        "baseline":   dict(start=0.2, end=0.07, peak=0.23),
-        "slow_decay": dict(start=0.2, end=0.10, peak=0.30),
-        "aggressive": dict(start=0.3, end=0.05, peak=0.20),
-    }
+    fixed_start = 0.2
+    fixed_end = 0.07
 
-    results = {}
+    # peaks: 0.15, 0.18, 0.21, ..., 0.39
+    peaks = [0.15 + 0.03 * i for i in range(9)]
 
-    for cfg_name, tri_params in triangle_configs.items():
+    for peak in peaks:
         print("\n" + "=" * 80)
-        print(f"RUNNING CONFIG: {cfg_name} -> {tri_params}")
+        print(f"RUNNING CONFIG: peak={peak:.2f} "
+              f"(start={fixed_start}, end={fixed_end})")
         print("=" * 80)
 
         accs = []
@@ -507,8 +509,9 @@ if __name__ == "__main__":
         best_time = float("inf")
         best_run = None
 
-        for run in range(10):   # maybe fewer runs per config to save time
-            acc, time_sec = main(run, tri_params)
+        # how many runs per peak (change 10 → 25 if you want)
+        for run in range(10):
+            acc, time_sec = main(run, peak)
             accs.append(acc)
             times.append(time_sec)
 
@@ -516,25 +519,16 @@ if __name__ == "__main__":
                 best_time = time_sec
                 best_run = run
                 print(
-                    f'\n🎉 NEW RECORD! Config {cfg_name}, Run {run}: '
-                    f'{time_sec:.4f}s (accuracy: {acc:.4f})\n'
+                    f"\n🎉 NEW RECORD! peak={peak:.2f}, Run {run}: "
+                    f"{time_sec:.4f}s (accuracy: {acc:.4f})\n"
                 )
 
-        accs = torch.tensor(accs)
-        times = torch.tensor(times)
+        accs_t = torch.tensor(accs)
+        times_t = torch.tensor(times)
 
-        results[cfg_name] = {
-            "mean_acc": float(accs.mean()),
-            "std_acc": float(accs.std()),
-            "mean_time": float(times.mean()),
-            "std_time": float(times.std()),
-            "best_time_94plus": float(best_time) if best_run is not None else None,
-            "best_run": best_run,
-        }
-
-        print(f"\nSummary for {cfg_name}:")
-        print(f"Accuracy - Mean: {accs.mean():.4f}    Std: {accs.std():.4f}")
-        print(f"Time     - Mean: {times.mean():.4f}    Std: {times.std():.4f}")
+        print(f"\nSummary for peak={peak:.2f}:")
+        print(f"Accuracy - Mean: {accs_t.mean():.4f}    Std: {accs_t.std():.4f}")
+        print(f"Time     - Mean: {times_t.mean():.4f}    Std: {times_t.std():.4f}")
 
     # Best time stats for runs achieving 94%+
     successful_mask = accs >= 0.94
