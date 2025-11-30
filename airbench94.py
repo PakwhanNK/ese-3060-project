@@ -377,7 +377,37 @@ def main(run):
     other_params = [p for k, p in model.named_parameters() if 'norm' not in k and p.requires_grad]
     param_configs = [dict(params=norm_biases, lr=lr_biases, weight_decay=wd/lr_biases),
                      dict(params=other_params, lr=lr, weight_decay=wd/lr)]
-    optimizer = torch.optim.SGD(param_configs, momentum=momentum, nesterov=True)
+
+    # optimizer = torch.optim.SGD(param_configs, momentum=momentum, nesterov=True)
+
+    conv_params = []
+    other_params = []
+
+    for name, p in model.named_parameters():
+        if p.requires_grad:
+            if 'conv' in name.lower() or 'linear' in name.lower():
+                if p.ndim >= 2 and '0.weight' not in name:  # Exclude first whitening conv
+                    conv_params.append(p)
+                else:
+                    other_params.append(p)
+            else:
+                other_params.append(p)
+
+    # Create Muon optimizer for conv params, SGD for others
+    from muon import Muon  # or use the standalone implementation above
+
+    muon_optimizer = Muon(conv_params, lr=0.02, momentum=0.95)
+    sgd_optimizer = torch.optim.SGD(other_params, lr=lr, momentum=momentum,
+                                    nesterov=True, weight_decay=wd / lr)
+
+    # In training loop, step both:
+    # Replace optimizer.step() with:
+    muon_optimizer.step()
+    sgd_optimizer.step()
+
+    # Replace optimizer.zero_grad() with:
+    muon_optimizer.zero_grad(set_to_none=True)
+    sgd_optimizer.zero_grad(set_to_none=True)
 
     def get_lr(step):
         warmup_steps = int(total_train_steps * 0.23)
