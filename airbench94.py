@@ -400,15 +400,6 @@ def main(run):
     sgd_optimizer = torch.optim.SGD(other_params, lr=lr, momentum=momentum,
                                     nesterov=True, weight_decay=wd / lr)
 
-    # In training loop, step both:
-    # Replace optimizer.step() with:
-    muon_optimizer.step()
-    sgd_optimizer.step()
-
-    # Replace optimizer.zero_grad() with:
-    muon_optimizer.zero_grad(set_to_none=True)
-    sgd_optimizer.zero_grad(set_to_none=True)
-
     def get_lr(step):
         warmup_steps = int(total_train_steps * 0.23)
         warmdown_steps = total_train_steps - warmup_steps
@@ -417,7 +408,7 @@ def main(run):
             return 0.2 * (1 - frac) + 1.0 * frac
         else:
             frac = (step - warmup_steps) / warmdown_steps
-            return 1.0 * (1 - frac) + 0.07 * frac
+            return 1.0 * g(1 - frac) + 0.07 * frac
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, get_lr)
 
     alpha_schedule = 0.95**5 * (torch.arange(total_train_steps+1) / total_train_steps)**3
