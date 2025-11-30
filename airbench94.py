@@ -349,7 +349,7 @@ def evaluate(model, loader, tta_level=0):
 #                Training                  #
 ############################################
 
-def main(run, peak):
+def main(run, start):
 
     batch_size = hyp['opt']['batch_size']
     epochs = hyp['opt']['train_epochs']
@@ -380,7 +380,7 @@ def main(run, peak):
                      dict(params=other_params, lr=lr, weight_decay=wd/lr)]
     optimizer = torch.optim.SGD(param_configs, momentum=momentum, nesterov=True)
 
-    def triangle(steps, start=0, end=0, peak=0.5):
+    def triangle(steps, start=0.0, end=0.0, peak=0.5):
         """
         Creates a triangular learning rate schedule.
 
@@ -406,9 +406,16 @@ def main(run, peak):
     fixed_start = 0.2
     fixed_end = 0.07
 
-    lr_schedule = triangle(total_train_steps, start=0.2, end=0.07, peak=0.23)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
-                                                  lambda i: lr_schedule[i])
+    lr_schedule = triangle(
+        total_train_steps,
+        start=fixed_start,
+        end=fixed_end,
+        peak=peak,
+    )
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lambda i: lr_schedule[i]
+    )
 
     alpha_schedule = 0.95**5 * (torch.arange(total_train_steps+1) / total_train_steps)**3
     lookahead_state = LookaheadState(model)
@@ -527,8 +534,8 @@ if __name__ == "__main__":
         times_t = torch.tensor(times)
 
         print(f"\nSummary for peak={peak:.2f}:")
-        print(f"Accuracy - Mean: {accs_t.mean():.4f}    Std: {accs_t.std():.4f}")
-        print(f"Time     - Mean: {times_t.mean():.4f}    Std: {times_t.std():.4f}")
+        print(f"Accuracy - Mean: {accs_t.mean():.4f}    Std: {accs_t.std():.4f}     Min: {min(accs_t):.4f}")
+        print(f"Time     - Mean: {times_t.mean():.4f}    Std: {times_t.std():.4f}    Min: {min(times_t):.4f}")
 
     # Best time stats for runs achieving 94%+
     successful_mask = accs >= 0.94
