@@ -1,0 +1,27 @@
+# Dataset files (too large for git)
+cifar10/
+*.pt
+*.tar.gz
+
+# PyCharm files
+.idea/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Logs and experiments
+logs/
+experiments/
+*.log
+
+# Model checkpoints
+*.pth
+*.ckpt
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
