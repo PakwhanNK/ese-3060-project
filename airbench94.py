@@ -344,6 +344,7 @@ def evaluate(model, loader, tta_level=0):
     logits = infer(model, loader, tta_level)
     return (logits.argmax(1) == loader.labels).float().mean().item()
 
+
 ############################################
 #                Training                  #
 ############################################
@@ -479,7 +480,7 @@ def main(run):
     epoch = 'eval'
     print_training_details(locals(), is_final_entry=True)
 
-    return tta_val_acc
+    return tta_val_acc, total_time_seconds
 
 if __name__ == "__main__":
     with open(sys.argv[0]) as f:
@@ -487,10 +488,46 @@ if __name__ == "__main__":
 
     print_columns(logging_columns_list, is_head=True)
     #main('warmup')
-    accs = torch.tensor([main(run) for run in range(25)])
-    print('Mean: %.4f    Std: %.4f' % (accs.mean(), accs.std()))
+    # Run experiments and collect results
+    accs = []
+    times = []
+    best_time = float('inf')
+    best_run = None
 
-    log = {'code': code, 'accs': accs}
+    for run in range(25):
+        acc, time_sec = main(run)  # Now unpacking both values
+        accs.append(acc)
+        times.append(time_sec)
+
+        # Track best time for 94%+ accuracy
+        if acc >= 0.94 and time_sec < best_time:
+            best_time = time_sec
+            best_run = run
+            print(
+                f'\n🎉 NEW RECORD! Run {run}: {time_sec:.4f}s (accuracy: {acc:.4f})\n')
+
+    accs = torch.tensor(accs)
+    times = torch.tensor(times)
+
+    # Print summary
+    print('\n' + '=' * 80)
+    print('FINAL RESULTS')
+    print('=' * 80)
+    print(f'Accuracy - Mean: {accs.mean():.4f}    Std: {accs.std():.4f}')
+    print(f'Time     - Mean: {times.mean():.4f}    Std: {times.std():.4f}')
+
+    # Best time stats for runs achieving 94%+
+    successful_mask = accs >= 0.94
+    if successful_mask.any():
+        successful_times = times[successful_mask]
+        print(f'\n--- Runs Achieving 94%+ Accuracy ---')
+        print(f'Best Time:   {best_time:.4f}s (Run #{best_run})')
+        print(f'Mean Time:   {successful_times.mean():.4f}s')
+        print(f'Median Time: {successful_times.median():.4f}s')
+        print(f'Success Rate: {successful_mask.sum().item()}/{len(accs)} ({100*successful_mask.float().mean():.1f}%)')
+    print('='*80 + '\n')
+
+    log = {'code': code, 'accs': accs, 'times': times}
     log_dir = os.path.join('logs', str(uuid.uuid4()))
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, 'log.pt')
@@ -500,9 +537,22 @@ if __name__ == "__main__":
     log_json = {
         'mean_accuracy': float(accs.mean()),
         'std_accuracy': float(accs.std()),
+        'mean_time': float(times.mean()),
+        'std_time': float(times.std()),
         'accuracies': accs.tolist(),
+        'times': times.tolist(),
         'hyperparameters': hyp
     }
+
+    # Add best time info if any runs succeeded
+    if successful_mask.any():
+        log_json['best_time_94plus'] = {
+            'time': float(best_time),
+            'run': best_run,
+            'mean_time': float(successful_times.mean()),
+            'median_time': float(successful_times.median()),
+            'success_rate': float(successful_mask.float().mean())
+        }
 
     json_path = os.path.join(log_dir, 'log.json')
     with open(json_path, 'w', encoding='utf-8') as f:
