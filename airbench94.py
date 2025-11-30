@@ -349,7 +349,7 @@ def evaluate(model, loader, tta_level=0):
 #                Training                  #
 ############################################
 
-def main(run):
+def main(run, triangle_params):
 
     batch_size = hyp['opt']['batch_size']
     epochs = hyp['opt']['train_epochs']
@@ -487,34 +487,54 @@ if __name__ == "__main__":
         code = f.read()
 
     print_columns(logging_columns_list, is_head=True)
-    #main('warmup')
-    # Run experiments and collect results
-    accs = []
-    times = []
-    best_time = float('inf')
-    best_run = None
 
-    for run in range(25):
-        acc, time_sec = main(run)  # Now unpacking both values
-        accs.append(acc)
-        times.append(time_sec)
+    # Different triangle configs to try
+    triangle_configs = {
+        "baseline":   dict(start=0.2, end=0.07, peak=0.23),
+        "slow_decay": dict(start=0.2, end=0.10, peak=0.30),
+        "aggressive": dict(start=0.3, end=0.05, peak=0.20),
+    }
 
-        # Track best time for 94%+ accuracy
-        if acc >= 0.94 and time_sec < best_time:
-            best_time = time_sec
-            best_run = run
-            print(
-                f'\n🎉 NEW RECORD! Run {run}: {time_sec:.4f}s (accuracy: {acc:.4f})\n')
+    results = {}
 
-    accs = torch.tensor(accs)
-    times = torch.tensor(times)
+    for cfg_name, tri_params in triangle_configs.items():
+        print("\n" + "=" * 80)
+        print(f"RUNNING CONFIG: {cfg_name} -> {tri_params}")
+        print("=" * 80)
 
-    # Print summary
-    print('\n' + '=' * 80)
-    print('FINAL RESULTS')
-    print('=' * 80)
-    print(f'Accuracy - Mean: {accs.mean():.4f}    Std: {accs.std():.4f}')
-    print(f'Time     - Mean: {times.mean():.4f}    Std: {times.std():.4f}')
+        accs = []
+        times = []
+        best_time = float("inf")
+        best_run = None
+
+        for run in range(10):   # maybe fewer runs per config to save time
+            acc, time_sec = main(run, tri_params)
+            accs.append(acc)
+            times.append(time_sec)
+
+            if acc >= 0.94 and time_sec < best_time:
+                best_time = time_sec
+                best_run = run
+                print(
+                    f'\n🎉 NEW RECORD! Config {cfg_name}, Run {run}: '
+                    f'{time_sec:.4f}s (accuracy: {acc:.4f})\n'
+                )
+
+        accs = torch.tensor(accs)
+        times = torch.tensor(times)
+
+        results[cfg_name] = {
+            "mean_acc": float(accs.mean()),
+            "std_acc": float(accs.std()),
+            "mean_time": float(times.mean()),
+            "std_time": float(times.std()),
+            "best_time_94plus": float(best_time) if best_run is not None else None,
+            "best_run": best_run,
+        }
+
+        print(f"\nSummary for {cfg_name}:")
+        print(f"Accuracy - Mean: {accs.mean():.4f}    Std: {accs.std():.4f}")
+        print(f"Time     - Mean: {times.mean():.4f}    Std: {times.std():.4f}")
 
     # Best time stats for runs achieving 94%+
     successful_mask = accs >= 0.94
