@@ -18,6 +18,7 @@ from math import ceil
 
 import torch
 from torch import nn
+from torch.optim.optimizer import Optimizer
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
@@ -271,6 +272,97 @@ class LookaheadState:
                 ema_param.lerp_(net_param, 1-decay)
                 net_param.copy_(ema_param)
 
+
+############################################
+#                 Muon                     #
+############################################
+@torch.compile
+def zeropower_via_newtonschulz5(G, steps=5, eps=1e-7):
+    """
+    Newton-Schulz iteration to compute the zeroth power / orthogonalization of G.
+    """
+    assert len(G.shape) == 2
+    a, b, c = (3.4445, -4.7750, 2.0315)
+    X = G.bfloat16()
+    X = X / (X.norm() + eps)
+
+    if G.size(0) > G.size(1):
+        X = X.T
+
+    for _ in range(steps):
+        A = X @ X.T
+        B = b * A + c * A @ A
+        X = a * X + B @ X
+
+    if G.size(0) > G.size(1):
+        X = X.T
+
+    return X.to(G.dtype)
+
+
+class Muon(Optimizer):
+    """
+    Muon optimizer - single GPU version (no distributed training).
+    """
+
+    def __init__(self, params, lr=0.02, momentum=0.95, nesterov=True,
+                 ns_steps=5, weight_decay=0.0):
+        defaults = dict(lr=lr, momentum=momentum, nesterov=nesterov,
+                        ns_steps=ns_steps, weight_decay=weight_decay)
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+
+        for group in self.param_groups:
+            lr = group['lr']
+            momentum = group['momentum']
+            nesterov = group['nesterov']
+            ns_steps = group['ns_steps']
+            weight_decay = group['weight_decay']
+
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+
+                g = p.grad
+                state = self.state[p]
+
+                if 'momentum_buffer' not in state:
+                    state['momentum_buffer'] = torch.zeros_like(g)
+
+                buf = state['momentum_buffer']
+                buf.mul_(momentum).add_(g)
+
+                if nesterov:
+                    g = g.add(buf, alpha=momentum)
+                else:
+                    g = buf
+
+                # Orthogonalize
+                if g.ndim == 2:
+                    g_orth = zeropower_via_newtonschulz5(g, steps=ns_steps)
+                elif g.ndim > 2:
+                    original_shape = g.shape
+                    g_2d = g.view(g.size(0), -1)
+                    g_orth = zeropower_via_newtonschulz5(g_2d, steps=ns_steps)
+                    g_orth = g_orth.view(original_shape)
+                else:
+                    g_orth = g
+
+                # Weight decay
+                if weight_decay != 0:
+                    p.mul_(1 - lr * weight_decay)
+
+                # Update
+                p.add_(g_orth, alpha=-lr)
+
+        return loss
+
 ############################################
 #                 Logging                  #
 ############################################
@@ -373,32 +465,41 @@ def main(run):
     model = make_net()
     current_steps = 0
 
-    norm_biases = [p for k, p in model.named_parameters() if 'norm' in k and p.requires_grad]
-    other_params = [p for k, p in model.named_parameters() if 'norm' not in k and p.requires_grad]
-    param_configs = [dict(params=norm_biases, lr=lr_biases, weight_decay=wd/lr_biases),
-                     dict(params=other_params, lr=lr, weight_decay=wd/lr)]
-
-    # optimizer = torch.optim.SGD(param_configs, momentum=momentum, nesterov=True)
-
-    conv_params = []
+    # Separate parameters for Muon vs SGD
+    muon_params = []
+    norm_biases = []
     other_params = []
 
     for name, p in model.named_parameters():
-        if p.requires_grad:
-            if 'conv' in name.lower() or 'linear' in name.lower():
-                if p.ndim >= 2 and '0.weight' not in name:  # Exclude first whitening conv
-                    conv_params.append(p)
-                else:
-                    other_params.append(p)
-            else:
-                other_params.append(p)
+        if not p.requires_grad:
+            continue
 
-    # Create Muon optimizer for conv params, SGD for others
-    from muon import Muon  # or use the standalone implementation above
+        # BatchNorm biases -> high LR SGD
+        if 'norm' in name:
+            norm_biases.append(p)
+        # Conv/Linear 2D+ weights (excluding first whitening layer) -> Muon
+        elif p.ndim >= 2 and (
+                'conv' in name or 'linear' in name) and not name.startswith(
+                '0.'):
+            muon_params.append(p)
+        # Everything else -> SGD
+        else:
+            other_params.append(p)
 
-    muon_optimizer = Muon(conv_params, lr=0.02, momentum=0.95)
-    sgd_optimizer = torch.optim.SGD(other_params, lr=lr, momentum=momentum,
-                                    nesterov=True, weight_decay=wd / lr)
+    print(
+        f"Muon params: {len(muon_params)}, SGD params: {len(norm_biases) + len(other_params)}")
+
+    # Create Muon optimizer
+    muon_optimizer = Muon(muon_params, lr=0.02, momentum=0.95,
+                          weight_decay=0.01, nesterov=True)
+
+    # Create SGD optimizer for other params
+    param_configs = [
+        dict(params=norm_biases, lr=lr_biases, weight_decay=wd / lr_biases),
+        dict(params=other_params, lr=lr, weight_decay=wd / lr)
+    ]
+    sgd_optimizer = torch.optim.SGD(param_configs, momentum=momentum,
+                                    nesterov=True)
 
     def get_lr(step):
         warmup_steps = int(total_train_steps * 0.23)
@@ -409,7 +510,12 @@ def main(run):
         else:
             frac = (step - warmup_steps) / warmdown_steps
             return 1.0 * g(1 - frac) + 0.07 * frac
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, get_lr)
+
+    muon_scheduler = torch.optim.lr_scheduler.LambdaLR(muon_optimizer,
+                                                       lambda i: lr_schedule[
+                                                           i])
+    sgd_scheduler = torch.optim.lr_scheduler.LambdaLR(sgd_optimizer,
+                                                      lambda i: lr_schedule[i])
 
     alpha_schedule = 0.95**5 * (torch.arange(total_train_steps+1) / total_train_steps)**3
     lookahead_state = LookaheadState(model)
@@ -442,12 +548,17 @@ def main(run):
 
             outputs = model(inputs)
             loss = loss_fn(outputs, labels).sum()
+
             muon_optimizer.zero_grad(set_to_none=True)
             sgd_optimizer.zero_grad(set_to_none=True)
+
             loss.backward()
+
             muon_optimizer.step()
             sgd_optimizer.step()
-            scheduler.step()
+
+            muon_scheduler.step()
+            sgd_scheduler.step()
 
             current_steps += 1
 
