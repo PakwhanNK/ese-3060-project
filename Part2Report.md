@@ -1,4 +1,4 @@
-# Part 1 Report
+# Part 2 Report
 
 We came up with four ideas for systemic improvements to the NanoGPT architecture and processing pipeline. They involve changes to the normalization function, the QKV dimensionality representation, and the activation function.
 
