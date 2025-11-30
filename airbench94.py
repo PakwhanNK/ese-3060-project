@@ -451,9 +451,11 @@ def main(run):
 
             outputs = model(inputs)
             loss = loss_fn(outputs, labels).sum()
-            optimizer.zero_grad(set_to_none=True)
+            muon_optimizer.zero_grad(set_to_none=True)
+            sgd_optimizer.zero_grad(set_to_none=True)
             loss.backward()
-            optimizer.step()
+            muon_optimizer.step()
+            sgd_optimizer.step()
             scheduler.step()
 
             current_steps += 1
