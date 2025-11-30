@@ -6,7 +6,7 @@
 # We recorded the runtime of 3.83 seconds on an NVIDIA A100-SXM4-80GB with the following nvidia-smi:
 # NVIDIA-SMI 515.105.01   Driver Version: 515.105.01   CUDA Version: 11.7
 # torch.__version__ == '2.1.2+cu118'
-
+import json
 #############################################
 #            Setup/Hyperparameters          #
 #############################################
@@ -627,4 +627,16 @@ if __name__ == "__main__":
     log_path = os.path.join(log_dir, 'log.pt')
     print(os.path.abspath(log_path))
     torch.save(log, os.path.join(log_dir, 'log.pt'))
+
+    log_json = {
+        'mean_accuracy': float(accs.mean()),
+        'std_accuracy': float(accs.std()),
+        'accuracies': accs.tolist(),
+        'hyperparameters': hyp
+    }
+
+    json_path = os.path.join(log_dir, 'log.json')
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(log_json, f, indent=2, ensure_ascii=False)
+    print(f"JSON log saved to: {os.path.abspath(json_path)}")
 
