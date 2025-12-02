@@ -7,6 +7,7 @@
 # NVIDIA-SMI 515.105.01   Driver Version: 515.105.01   CUDA Version: 11.7
 # torch.__version__ == '2.1.2+cu118'
 import json
+from experiment_logger import ExperimentLogger, ExperimentAggregator
 #############################################
 #            Setup/Hyperparameters          #
 #############################################
@@ -380,7 +381,7 @@ def main(run):
                      dict(params=other_params, lr=lr, weight_decay=wd/lr)]
     optimizer = torch.optim.SGD(param_configs, momentum=momentum, nesterov=True)
 
-    def triangle(steps, start=0, end=0, peak=0.5):
+    def triangle(steps, start=0.0, end=0.0, peak=0.5):
         """
         Creates a triangular learning rate schedule.
 
@@ -482,79 +483,58 @@ def main(run):
 
     return tta_val_acc, total_time_seconds
 
+
 if __name__ == "__main__":
-    with open(sys.argv[0]) as f:
-        code = f.read()
+    import argparse
 
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--exp_name', type=str, default='unnamed_exp',
+                        help='Experiment name')
+    parser.add_argument('--desc', type=str, default='',
+                        help='Experiment description')
+    parser.add_argument('--runs', type=int, default=25,
+                        help='Number of runs')
+    parser.add_argument('--compare', nargs='+', default=None,
+                        help='Compare experiments')
+
+    args = parser.parse_args()
+
+    # If comparing experiments, do that and exit
+    if args.compare:
+        aggregator = ExperimentAggregator()
+        aggregator.aggregate_experiments(args.compare)
+        exit(0)
+
+    # Initialize experiment logger
+    logger = ExperimentLogger(
+        experiment_name=args.exp_name,
+        experiment_description=args.desc,
+        hyperparameters=hyp
+    )
+
+    print(f"\n{'=' * 80}")
+    print(f"EXPERIMENT: {args.exp_name}")
+    print(f"Description: {args.desc}")
+    print(f"{'=' * 80}\n")
+
+    # Run training
     print_columns(logging_columns_list, is_head=True)
-    #main('warmup')
-    # Run experiments and collect results
-    accs = []
-    times = []
-    best_time = float('inf')
-    best_run = None
 
-    for run in range(25):
-        acc, time_sec = main(run)  # Now unpacking both values
-        accs.append(acc)
-        times.append(time_sec)
+    for run_id in range(args.runs):
+        # Run training - now returns (accuracy, time)
+        tta_val_acc, total_time_seconds = main(run_id)
 
-        # Track best time for 94%+ accuracy
-        if acc >= 0.94 and time_sec < best_time:
-            best_time = time_sec
-            best_run = run
-            print(
-                f'\n🎉 NEW RECORD! Run {run}: {time_sec:.4f}s (accuracy: {acc:.4f})\n')
+        # Log this run
+        logger.log_run(
+            run_id=run_id,
+            accuracy=tta_val_acc,
+            time_seconds=total_time_seconds,
+            epochs_completed=hyp['opt']['train_epochs']
+        )
 
-    accs = torch.tensor(accs)
-    times = torch.tensor(times)
+    # Save and print summary
+    logger.save_summary()
+    logger.print_summary()
 
-    # Print summary
-    print('\n' + '=' * 80)
-    print('FINAL RESULTS')
-    print('=' * 80)
-    print(f'Accuracy - Mean: {accs.mean():.4f}    Std: {accs.std():.4f}')
-    print(f'Time     - Mean: {times.mean():.4f}    Std: {times.std():.4f}')
-
-    # Best time stats for runs achieving 94%+
-    successful_mask = accs >= 0.94
-    if successful_mask.any():
-        successful_times = times[successful_mask]
-        print(f'\n--- Runs Achieving 94%+ Accuracy ---')
-        print(f'Best Time:   {best_time:.4f}s (Run #{best_run})')
-        print(f'Mean Time:   {successful_times.mean():.4f}s')
-        print(f'Median Time: {successful_times.median():.4f}s')
-        print(f'Success Rate: {successful_mask.sum().item()}/{len(accs)} ({100*successful_mask.float().mean():.1f}%)')
-    print('='*80 + '\n')
-
-    log = {'code': code, 'accs': accs, 'times': times}
-    log_dir = os.path.join('logs', str(uuid.uuid4()))
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, 'log.pt')
-    print(os.path.abspath(log_path))
-    torch.save(log, os.path.join(log_dir, 'log.pt'))
-
-    log_json = {
-        'mean_accuracy': float(accs.mean()),
-        'std_accuracy': float(accs.std()),
-        'mean_time': float(times.mean()),
-        'std_time': float(times.std()),
-        'accuracies': accs.tolist(),
-        'times': times.tolist(),
-        'hyperparameters': hyp
-    }
-
-    # Add best time info if any runs succeeded
-    if successful_mask.any():
-        log_json['best_time_94plus'] = {
-            'time': float(best_time),
-            'run': best_run,
-            'mean_time': float(successful_times.mean()),
-            'median_time': float(successful_times.median()),
-            'success_rate': float(successful_mask.float().mean())
-        }
-
-    json_path = os.path.join(log_dir, 'log.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(log_json, f, indent=2, ensure_ascii=False)
-    print(f"JSON log saved to: {os.path.abspath(json_path)}")
+    print(f"\n✓ Results saved to: experiments/{args.exp_name}/")
