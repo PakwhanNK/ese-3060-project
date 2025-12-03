@@ -350,7 +350,7 @@ def evaluate(model, loader, tta_level=0):
 #                Training                  #
 ############################################
 
-def main(run, start):
+def main(run, peak):
 
     batch_size = hyp['opt']['batch_size']
     epochs = hyp['opt']['train_epochs']
@@ -403,15 +403,15 @@ def main(run, start):
         indices = torch.clamp(indices, 0, len(m) - 1)
         return m[indices] * x + b[indices]
 
-    # fixed start / end, variable peak
-    fixed_peak = 0.23  # choose your favourite peak LR
-    fixed_end = 0.07  # fixed final LR
+    # fixed start / end, with variable peak
+    fixed_start = 0.20
+    fixed_end = 0.07
 
     lr_schedule = triangle(
         total_train_steps,
-        start=start,
+        start=fixed_start,
         end=fixed_end,
-        peak=fixed_peak,
+        peak=peak,
     )
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -501,9 +501,9 @@ if __name__ == "__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='CIFAR-10 LR Sweep Experiment')
-    parser.add_argument('--sweep_name', type=str, default='lr_sweep_start',
-                        help='Base name for this sweep (e.g., lr_sweep_start)')
+        description='CIFAR-10 LR Peak Sweep Experiment')
+    parser.add_argument('--sweep_name', type=str, default='lr_sweep_peak',
+                        help='Base name for this sweep (e.g., lr_sweep_peak)')
     parser.add_argument('--runs_per_config', type=int, default=10,
                         help='Number of runs per configuration')
     parser.add_argument('--compare', action='store_true',
@@ -511,10 +511,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Configuration for sweep
-    fixed_peak = 0.15
-    fixed_end = 0.07
-    starts = [0.05 + 0.05 * i for i in range(8)]  # 0.05 to 0.40
+    # Configuration for sweep - FIXED start and end, SWEEP peak
+    fixed_start = 0.2  # Fixed starting LR multiplier
+    fixed_end = 0.07  # Fixed ending LR multiplier
+
+    # Peak values to test (fraction of training where LR reaches maximum)
+    # Original was 0.23, so test around that value
+    peaks = [0.15, 0.18, 0.21, 0.24, 0.27, 0.30, 0.33]
 
     # If --compare flag is used, just generate comparison
     if args.compare:
@@ -523,8 +526,8 @@ if __name__ == "__main__":
         print("=" * 80)
 
         # Find all experiments with this sweep name
-        sweep_experiments = [f"{args.sweep_name}_start{int(s * 100):02d}" for s
-                             in starts]
+        sweep_experiments = [f"{args.sweep_name}_peak{int(p * 100):02d}" for p
+                             in peaks]
 
         aggregator = ExperimentAggregator()
         aggregator.aggregate_experiments(sweep_experiments)
@@ -535,25 +538,26 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 80)
     print(f"PARAMETER SWEEP: {args.sweep_name}")
-    print(f"Testing start values: {starts}")
+    print(f"Testing peak values: {peaks}")
+    print(f"Fixed: start={fixed_start}, end={fixed_end}")
     print(f"Runs per config: {args.runs_per_config}")
-    print(f"Total runs: {len(starts) * args.runs_per_config}")
+    print(f"Total runs: {len(peaks) * args.runs_per_config}")
     print("=" * 80 + "\n")
 
-    # Run sweep for each start value
-    for start in starts:
+    # Run sweep for each peak value
+    for peak in peaks:
         # Create unique experiment name for this configuration
-        exp_name = f"{args.sweep_name}_start{int(start * 100):02d}"
+        exp_name = f"{args.sweep_name}_peak{int(peak * 100):02d}"
 
         # Initialize logger for this configuration
         logger = ExperimentLogger(
             experiment_name=exp_name,
-            experiment_description=f"LR sweep: start={start:.2f}, peak={fixed_peak}, end={fixed_end}",
+            experiment_description=f"LR sweep: start={fixed_start}, peak={peak:.2f}, end={fixed_end}",
             hyperparameters={
                 **hyp,
                 'lr_schedule': {
-                    'start': start,
-                    'peak': fixed_peak,
+                    'start': fixed_start,
+                    'peak': peak,
                     'end': fixed_end
                 }
             }
@@ -561,7 +565,7 @@ if __name__ == "__main__":
 
         print("\n" + "=" * 80)
         print(
-            f"RUNNING CONFIG: start={start:.2f} (peak={fixed_peak}, end={fixed_end})")
+            f"RUNNING CONFIG: peak={peak:.2f} (start={fixed_start}, end={fixed_end})")
         print("=" * 80)
 
         # Print column headers
@@ -572,8 +576,9 @@ if __name__ == "__main__":
 
         # Run training multiple times for this configuration
         for run in range(args.runs_per_config):
-            # Run training
-            acc, time_sec = main(run, start)
+            # Run training with fixed start value
+            acc, time_sec = main(run, fixed_start,
+                                 peak)  # Pass both start and peak
 
             # Log this run
             logger.log_run(
@@ -588,7 +593,7 @@ if __name__ == "__main__":
                 best_time = time_sec
                 best_run = run
                 print(
-                    f"\n✓ NEW RECORD! start={start:.2f}, Run {run}: "
+                    f"\n✓ NEW RECORD! peak={peak:.2f}, Run {run}: "
                     f"{time_sec:.4f}s (accuracy: {acc:.4f})\n"
                 )
 
