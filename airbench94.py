@@ -7,6 +7,7 @@
 # NVIDIA-SMI 515.105.01   Driver Version: 515.105.01   CUDA Version: 11.7
 # torch.__version__ == '2.1.2+cu118'
 import json
+from experiment_logger import ExperimentLogger, ExperimentAggregator
 #############################################
 #            Setup/Hyperparameters          #
 #############################################
@@ -493,91 +494,123 @@ def main(run, start):
 
     return tta_val_acc, total_time_seconds
 
+
 if __name__ == "__main__":
-    with open(sys.argv[0]) as f:
-        code = f.read()
+    import argparse
+    from experiment_logger import ExperimentLogger, ExperimentAggregator
 
-    print_columns(logging_columns_list, is_head=True)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='CIFAR-10 LR Sweep Experiment')
+    parser.add_argument('--sweep_name', type=str, default='lr_sweep_start',
+                        help='Base name for this sweep (e.g., lr_sweep_start)')
+    parser.add_argument('--runs_per_config', type=int, default=10,
+                        help='Number of runs per configuration')
+    parser.add_argument('--compare', action='store_true',
+                        help='Just compare existing sweep results and exit')
 
+    args = parser.parse_args()
+
+    # Configuration for sweep
     fixed_peak = 0.15
     fixed_end = 0.07
+    starts = [0.05 + 0.05 * i for i in range(8)]  # 0.05 to 0.40
 
-    # 🔁 Different starting LRs (min starting point)
-    starts = [0.05 + 0.05 * i for i in range(8)]   # 0.05 to 0.40
-
-    for start in starts:
+    # If --compare flag is used, just generate comparison
+    if args.compare:
         print("\n" + "=" * 80)
-        print(
-            f"RUNNING CONFIG: start={start:.2f} "
-            f"(peak={fixed_peak}, end={fixed_end})"
-        )
+        print("GENERATING SWEEP COMPARISON")
         print("=" * 80)
 
-        accs = []
-        times = []
+        # Find all experiments with this sweep name
+        sweep_experiments = [f"{args.sweep_name}_start{int(s * 100):02d}" for s
+                             in starts]
+
+        aggregator = ExperimentAggregator()
+        aggregator.aggregate_experiments(sweep_experiments)
+        exit(0)
+
+    # Store experiment names for final comparison
+    all_experiments = []
+
+    print("\n" + "=" * 80)
+    print(f"PARAMETER SWEEP: {args.sweep_name}")
+    print(f"Testing start values: {starts}")
+    print(f"Runs per config: {args.runs_per_config}")
+    print(f"Total runs: {len(starts) * args.runs_per_config}")
+    print("=" * 80 + "\n")
+
+    # Run sweep for each start value
+    for start in starts:
+        # Create unique experiment name for this configuration
+        exp_name = f"{args.sweep_name}_start{int(start * 100):02d}"
+
+        # Initialize logger for this configuration
+        logger = ExperimentLogger(
+            experiment_name=exp_name,
+            experiment_description=f"LR sweep: start={start:.2f}, peak={fixed_peak}, end={fixed_end}",
+            hyperparameters={
+                **hyp,
+                'lr_schedule': {
+                    'start': start,
+                    'peak': fixed_peak,
+                    'end': fixed_end
+                }
+            }
+        )
+
+        print("\n" + "=" * 80)
+        print(
+            f"RUNNING CONFIG: start={start:.2f} (peak={fixed_peak}, end={fixed_end})")
+        print("=" * 80)
+
+        # Print column headers
+        print_columns(logging_columns_list, is_head=True)
+
         best_time = float("inf")
         best_run = None
 
-        # how many runs per start (change 10 if you want more)
-        for run in range(10):
+        # Run training multiple times for this configuration
+        for run in range(args.runs_per_config):
+            # Run training
             acc, time_sec = main(run, start)
-            accs.append(acc)
-            times.append(time_sec)
 
+            # Log this run
+            logger.log_run(
+                run_id=run,
+                accuracy=acc,
+                time_seconds=time_sec,
+                epochs_completed=hyp['opt']['train_epochs']
+            )
+
+            # Track best time
             if acc >= 0.94 and time_sec < best_time:
                 best_time = time_sec
                 best_run = run
                 print(
-                    f"\nNEW RECORD! start={start:.2f}, Run {run}: "
+                    f"\n✓ NEW RECORD! start={start:.2f}, Run {run}: "
                     f"{time_sec:.4f}s (accuracy: {acc:.4f})\n"
                 )
 
-        accs_t = torch.tensor(accs)
-        times_t = torch.tensor(times)
+        # Save results for this configuration
+        logger.save_summary()
+        logger.print_summary()
 
-        print(f"\nSummary for peak={peak:.2f}:")
-        print(f"Accuracy - Mean: {accs_t.mean():.4f}    Std: {accs_t.std():.4f}     Min: {min(accs_t):.4f}")
-        print(f"Time     - Mean: {times_t.mean():.4f}    Std: {times_t.std():.4f}    Min: {min(times_t):.4f}")
+        # Store experiment name for final comparison
+        all_experiments.append(exp_name)
 
-    # Best time stats for runs achieving 94%+
-    successful_mask = accs >= 0.94
-    if successful_mask.any():
-        successful_times = times[successful_mask]
-        print(f'\n--- Runs Achieving 94%+ Accuracy ---')
-        print(f'Best Time:   {best_time:.4f}s (Run #{best_run})')
-        print(f'Mean Time:   {successful_times.mean():.4f}s')
-        print(f'Median Time: {successful_times.median():.4f}s')
-        print(f'Success Rate: {successful_mask.sum().item()}/{len(accs)} ({100*successful_mask.float().mean():.1f}%)')
-    print('='*80 + '\n')
+        print(f"\n✓ Results saved to: experiments/{exp_name}/\n")
 
-    log = {'code': code, 'accs': accs, 'times': times}
-    log_dir = os.path.join('logs', str(uuid.uuid4()))
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, 'log.pt')
-    print(os.path.abspath(log_path))
-    torch.save(log, os.path.join(log_dir, 'log.pt'))
+    # Create final comparison across all sweep configurations
+    print("\n" + "=" * 80)
+    print("FINAL SWEEP COMPARISON")
+    print("=" * 80)
 
-    log_json = {
-        'mean_accuracy': float(accs.mean()),
-        'std_accuracy': float(accs.std()),
-        'mean_time': float(times.mean()),
-        'std_time': float(times.std()),
-        'accuracies': accs.tolist(),
-        'times': times.tolist(),
-        'hyperparameters': hyp
-    }
+    aggregator = ExperimentAggregator()
+    aggregator.aggregate_experiments(all_experiments)
 
-    # Add best time info if any runs succeeded
-    if successful_mask.any():
-        log_json['best_time_94plus'] = {
-            'time': float(best_time),
-            'run': best_run,
-            'mean_time': float(successful_times.mean()),
-            'median_time': float(successful_times.median()),
-            'success_rate': float(successful_mask.float().mean())
-        }
-
-    json_path = os.path.join(log_dir, 'log.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(log_json, f, indent=2, ensure_ascii=False)
-    print(f"JSON log saved to: {os.path.abspath(json_path)}")
+    print(f"\n✓ Sweep complete! {len(all_experiments)} configurations tested")
+    print(f"✓ Comparison saved to: experiments/experiments_comparison.csv")
+    print(f"\nTo visualize results, run:")
+    print(
+        f"    python visualize_results.py compare {' '.join(all_experiments[:3])} ...")
