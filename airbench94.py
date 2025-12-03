@@ -517,7 +517,7 @@ if __name__ == "__main__":
 
     # Peak values to test (fraction of training where LR reaches maximum)
     # Original was 0.23, so test around that value
-    peaks = [0.15, 0.18, 0.21, 0.24, 0.27, 0.30, 0.33]
+    peaks = [0.15, 0.18, 0.21, 0.24, 0.27, 0.30, 0.33, 0.36]
 
     # If --compare flag is used, just generate comparison
     if args.compare:
