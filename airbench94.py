@@ -408,7 +408,7 @@ def main(run):
                                                   lambda i: lr_schedule[i])
 
     alpha_schedule = 0.95**5 * (torch.arange(total_train_steps+1) / total_train_steps)**3
-    lookahead_state = LookaheadState(model)
+    # lookahead_state = LookaheadState(model)
 
     # For accurately timing GPU code
     starter = torch.cuda.Event(enable_timing=True)
@@ -445,13 +445,13 @@ def main(run):
 
             current_steps += 1
 
-            if current_steps % 5 == 0:
-                lookahead_state.update(model, decay=alpha_schedule[current_steps].item())
+            # if current_steps % 5 == 0:
+            #     lookahead_state.update(model, decay=alpha_schedule[current_steps].item())
 
-            if current_steps >= total_train_steps:
-                if lookahead_state is not None:
-                    lookahead_state.update(model, decay=1.0)
-                break
+            # if current_steps >= total_train_steps:
+            #     if lookahead_state is not None:
+            #         lookahead_state.update(model, decay=1.0)
+            #     break
 
         ender.record()
         torch.cuda.synchronize()
