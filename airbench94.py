@@ -7,6 +7,7 @@
 # NVIDIA-SMI 515.105.01   Driver Version: 515.105.01   CUDA Version: 11.7
 # torch.__version__ == '2.1.2+cu118'
 import json
+from experiment_logger import ExperimentLogger, ExperimentAggregator
 #############################################
 #            Setup/Hyperparameters          #
 #############################################
@@ -610,33 +611,61 @@ def main(run):
     epoch = 'eval'
     print_training_details(locals(), is_final_entry=True)
 
-    return tta_val_acc
+    return tta_val_acc, total_time_seconds
+
 
 if __name__ == "__main__":
-    with open(sys.argv[0]) as f:
-        code = f.read()
+    import argparse
 
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--exp_name', type=str, default='unnamed_exp',
+                        help='Experiment name')
+    parser.add_argument('--desc', type=str, default='',
+                        help='Experiment description')
+    parser.add_argument('--runs', type=int, default=25,
+                        help='Number of runs')
+    parser.add_argument('--compare', nargs='+', default=None,
+                        help='Compare experiments')
+
+    args = parser.parse_args()
+
+    # If comparing experiments, do that and exit
+    if args.compare:
+        aggregator = ExperimentAggregator()
+        aggregator.aggregate_experiments(args.compare)
+        exit(0)
+
+    # Initialize experiment logger
+    logger = ExperimentLogger(
+        experiment_name=args.exp_name,
+        experiment_description=args.desc,
+        hyperparameters=hyp
+    )
+
+    print(f"\n{'=' * 80}")
+    print(f"EXPERIMENT: {args.exp_name}")
+    print(f"Description: {args.desc}")
+    print(f"{'=' * 80}\n")
+
+    # Run training
     print_columns(logging_columns_list, is_head=True)
-    #main('warmup')
-    accs = torch.tensor([main(run) for run in range(25)])
-    print('Mean: %.4f    Std: %.4f' % (accs.mean(), accs.std()))
 
-    log = {'code': code, 'accs': accs}
-    log_dir = os.path.join('logs', str(uuid.uuid4()))
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, 'log.pt')
-    print(os.path.abspath(log_path))
-    torch.save(log, os.path.join(log_dir, 'log.pt'))
+    for run_id in range(args.runs):
+        # Run training - now returns (accuracy, time)
+        tta_val_acc, total_time_seconds = main(run_id)
 
-    log_json = {
-        'mean_accuracy': float(accs.mean()),
-        'std_accuracy': float(accs.std()),
-        'accuracies': accs.tolist(),
-        'hyperparameters': hyp
-    }
+        # Log this run
+        logger.log_run(
+            run_id=run_id,
+            accuracy=tta_val_acc,
+            time_seconds=total_time_seconds,
+            epochs_completed=hyp['opt']['train_epochs']
+        )
 
-    json_path = os.path.join(log_dir, 'log.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(log_json, f, indent=2, ensure_ascii=False)
-    print(f"JSON log saved to: {os.path.abspath(json_path)}")
+    # Save and print summary
+    logger.save_summary()
+    logger.print_summary()
+
+    print(f"\n✓ Results saved to: experiments/{args.exp_name}/")
 
