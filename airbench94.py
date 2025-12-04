@@ -352,6 +352,11 @@ def evaluate(model, loader, tta_level=0):
 
 def main(run):
 
+    # Set seed for reproducibility
+    seed = 42 + run if isinstance(run, int) else 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
     batch_size = hyp['opt']['batch_size']
     epochs = hyp['opt']['train_epochs']
     momentum = hyp['opt']['momentum']
@@ -481,7 +486,7 @@ def main(run):
     epoch = 'eval'
     print_training_details(locals(), is_final_entry=True)
 
-    return tta_val_acc, total_time_seconds
+    return tta_val_acc, total_time_seconds, seed
 
 
 if __name__ == "__main__":
@@ -516,6 +521,9 @@ if __name__ == "__main__":
     print(f"\n{'=' * 80}")
     print(f"EXPERIMENT: {args.exp_name}")
     print(f"Description: {args.desc}")
+    print(f"Git commit: {logger.git_info['short_hash']}")
+    if logger.git_info['dirty']:
+        print(f"WARNING: Uncommitted changes detected!")
     print(f"{'=' * 80}\n")
 
     # Run training
@@ -523,18 +531,21 @@ if __name__ == "__main__":
 
     for run_id in range(args.runs):
         # Run training - now returns (accuracy, time)
-        tta_val_acc, total_time_seconds = main(run_id)
+        tta_val_acc, total_time_seconds, seed = main(run_id)
 
         # Log this run
         logger.log_run(
             run_id=run_id,
             accuracy=tta_val_acc,
             time_seconds=total_time_seconds,
-            epochs_completed=hyp['opt']['train_epochs']
+            epochs_completed=hyp['opt']['train_epochs'],
+            seed=seed
         )
 
     # Save and print summary
     logger.save_summary()
     logger.print_summary()
 
-    print(f"\n✓ Results saved to: experiments/{args.exp_name}/")
+    print(f"\n Results saved to: experiments/{args.exp_name}/")
+    print(f"  Git commit: {logger.git_info['commit_hash']}")
+    print(f"  RunPod: {logger.runpod_info['instance_id']}")

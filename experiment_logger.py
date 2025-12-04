@@ -56,6 +56,10 @@ class ExperimentLogger:
         self.runs: List[Dict[str, Any]] = []
         self.start_time = datetime.now()
 
+        self.git_info = self._get_git_info()
+        self.environment_info = self._get_environment_info()
+        self.runpod_info = self._get_runpod_info()
+
         # Create metadata file
         self._save_metadata()
 
@@ -85,17 +89,121 @@ class ExperimentLogger:
             'memory_total': 'Unknown'
         }
 
+    def _get_git_info(self) -> Dict[str, str]:
+        """Get git commit hash and branch"""
+        try:
+            commit_hash = subprocess.run(
+                ['git', 'rev-parse', 'HEAD'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            ).stdout.strip()
+
+            branch = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            ).stdout.strip()
+
+            # Check for uncommitted changes
+            status = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            ).stdout.strip()
+
+            dirty = len(status) > 0
+
+            return {
+                'commit_hash': commit_hash,
+                'branch': branch,
+                'dirty': dirty,  # True if uncommitted changes
+                'short_hash': commit_hash[:7] if commit_hash else 'unknown'
+            }
+        except Exception as e:
+            print(f"Warning: Could not get git info: {e}")
+            return {
+                'commit_hash': 'unknown',
+                'branch': 'unknown',
+                'dirty': False,
+                'short_hash': 'unknown'
+            }
+
+    def _get_environment_info(self) -> Dict[str, Any]:
+        """Get environment details"""
+        try:
+            return {
+                'hostname': socket.gethostname(),
+                'python_version': sys.version.split()[0],
+                'torch_version': torch.__version__,
+                'cuda_version': torch.version.cuda if torch.cuda.is_available() else None,
+                'cudnn_version': torch.backends.cudnn.version() if torch.cuda.is_available() else None,
+                'gpu_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                'working_directory': os.getcwd(),
+            }
+        except Exception as e:
+            print(f"Warning: Could not get environment info: {e}")
+            return {}
+
+    def _get_runpod_info(self) -> Dict[str, str]:
+        """Get RunPod instance information if running on RunPod"""
+        runpod_info = {
+            'is_runpod': False,
+            'instance_id': 'unknown',
+            'instance_type': 'unknown'
+        }
+
+        try:
+            # RunPod sets these environment variables
+            pod_id = os.environ.get('RUNPOD_POD_ID', None)
+            if pod_id:
+                runpod_info['is_runpod'] = True
+                runpod_info['instance_id'] = pod_id
+
+            # Try to detect from hostname
+            hostname = socket.gethostname()
+            if 'runpod' in hostname.lower():
+                runpod_info['is_runpod'] = True
+                runpod_info['instance_id'] = hostname
+
+            # Try to get GPU name to infer instance type
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                runpod_info['instance_type'] = gpu_name
+
+        except Exception as e:
+            print(f"Warning: Could not get RunPod info: {e}")
+
+        return runpod_info
+
     def _save_metadata(self):
-        """Save experiment metadata to JSON."""
+        """Save experiment metadata to JSON - UPDATED VERSION"""
         metadata = {
             'experiment_name': self.experiment_name,
             'description': self.experiment_description,
             'start_time': self.start_time.isoformat(),
+
+            # Git information
+            'git_info': self.git_info,
+
+            # Environment
+            'environment': self.environment_info,
+
+            # GPU information
             'gpu_info': self.gpu_info,
-            'hyperparameters': self.hyperparameters,
+
+            # RunPod information
+            'runpod_info': self.runpod_info,
+
+            # PyTorch info
             'pytorch_version': torch.__version__,
             'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if torch.cuda.is_available() else None,
+
+            # Hyperparameters
+            'hyperparameters': self.hyperparameters,
         }
 
         metadata_path = self.experiment_dir / 'metadata.json'
@@ -108,7 +216,8 @@ class ExperimentLogger:
                 time_seconds: float,
                 train_loss: Optional[float] = None,
                 epochs_completed: Optional[float] = None,
-                additional_metrics: Optional[Dict] = None):
+                additional_metrics: Optional[Dict] = None,
+                seed: Optional[int] = None):  # NEW PARAMETER
         """
         Log a single training run.
 
@@ -119,9 +228,11 @@ class ExperimentLogger:
             train_loss: Final training loss (optional)
             epochs_completed: Number of epochs completed (optional)
             additional_metrics: Dict of additional metrics to log
+            seed: Random seed used for this run (optional but RECOMMENDED)
         """
         run_data = {
             'run_id': run_id,
+            'seed': seed,  # NEW: Critical for reproducibility
             'accuracy': float(accuracy),
             'time_seconds': float(time_seconds),
             'train_loss': float(
@@ -129,7 +240,9 @@ class ExperimentLogger:
             'epochs_completed': float(
                 epochs_completed) if epochs_completed is not None else None,
             'achieved_target': accuracy >= 0.94,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'git_commit': self.git_info['short_hash'],
+            # NEW: Track which code version
         }
 
         # Add any additional metrics
