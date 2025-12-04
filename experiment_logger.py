@@ -4,6 +4,8 @@ Tracks experiment metadata, timing, accuracy, and GPU usage with CSV export
 """
 
 import os
+import sys
+import socket
 import csv
 import json
 import torch
@@ -11,6 +13,8 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+import numpy as np
+from scipy import stats
 
 
 class ExperimentLogger:
@@ -159,7 +163,7 @@ class ExperimentLogger:
             writer.writerow(run_data)
 
     def compute_statistics(self) -> Dict[str, Any]:
-        """Compute comprehensive statistics across all runs."""
+        """Compute comprehensive statistics across all runs with confidence intervals."""
         if not self.runs:
             return {}
 
@@ -169,16 +173,31 @@ class ExperimentLogger:
         achieved_target = torch.tensor(
             [r['achieved_target'] for r in self.runs])
 
+        # Convert to numpy for scipy stats
+        acc_np = accuracies.numpy()
+        time_np = times.numpy()
+        n = len(self.runs)
+
+        # Calculate 95% confidence intervals using t-distribution
+        acc_ci = stats.t.interval(0.95, n-1, loc=np.mean(acc_np), scale=stats.sem(acc_np))
+        time_ci = stats.t.interval(0.95, n-1, loc=np.mean(time_np), scale=stats.sem(time_np))
+
         # Basic statistics
-        stats = {
+        stats_dict = {
             'num_runs': len(self.runs),
             'accuracy_mean': float(accuracies.mean()),
             'accuracy_std': float(accuracies.std()),
+            'accuracy_sem': float(stats.sem(acc_np)),  # Standard error of mean
+            'accuracy_ci_95_lower': float(acc_ci[0]),
+            'accuracy_ci_95_upper': float(acc_ci[1]),
             'accuracy_min': float(accuracies.min()),
             'accuracy_max': float(accuracies.max()),
             'accuracy_median': float(accuracies.median()),
             'time_mean': float(times.mean()),
             'time_std': float(times.std()),
+            'time_sem': float(stats.sem(time_np)),
+            'time_ci_95_lower': float(time_ci[0]),
+            'time_ci_95_upper': float(time_ci[1]),
             'time_min': float(times.min()),
             'time_max': float(times.max()),
             'time_median': float(times.median()),
@@ -191,17 +210,36 @@ class ExperimentLogger:
             successful_times = times[achieved_target]
             successful_accs = accuracies[achieved_target]
 
-            stats.update({
+            succ_time_np = successful_times.numpy()
+            succ_acc_np = successful_accs.numpy()
+            n_succ = len(succ_time_np)
+
+            # Confidence intervals for successful runs
+            if n_succ > 1:
+                succ_time_ci = stats.t.interval(0.95, n_succ-1, loc=np.mean(succ_time_np), scale=stats.sem(succ_time_np))
+                succ_acc_ci = stats.t.interval(0.95, n_succ-1, loc=np.mean(succ_acc_np), scale=stats.sem(succ_acc_np))
+            else:
+                succ_time_ci = (float(successful_times[0]), float(successful_times[0]))
+                succ_acc_ci = (float(successful_accs[0]), float(successful_accs[0]))
+
+            stats_dict.update({
                 'successful_time_mean': float(successful_times.mean()),
                 'successful_time_std': float(successful_times.std()),
+                'successful_time_sem': float(stats.sem(succ_time_np)),
+                'successful_time_ci_95_lower': float(succ_time_ci[0]),
+                'successful_time_ci_95_upper': float(succ_time_ci[1]),
                 'successful_time_min': float(successful_times.min()),
                 'successful_time_median': float(successful_times.median()),
                 'successful_accuracy_mean': float(successful_accs.mean()),
+                'successful_accuracy_std': float(successful_accs.std()),
+                'successful_accuracy_sem': float(stats.sem(succ_acc_np)),
+                'successful_accuracy_ci_95_lower': float(succ_acc_ci[0]),
+                'successful_accuracy_ci_95_upper': float(succ_acc_ci[1]),
                 'best_run_time': float(successful_times.min()),
                 'best_run_id': int(torch.argmin(successful_times)),
             })
 
-        return stats
+        return stats_dict
 
     def save_summary(self):
         """Save summary statistics and final results."""
