@@ -576,8 +576,8 @@ if __name__ == "__main__":
 
         # Run training multiple times for this configuration
         for run in range(args.runs_per_config):
-            # Run training - pass start and end parameters
-            acc, time_sec = main(run, fixed_start, end)
+            # Run training with end value
+            acc, time_sec = main(run, end)
 
             # Log this run
             logger.log_run(
