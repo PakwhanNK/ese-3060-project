@@ -1,0 +1,70 @@
+========================================
+RUNPOD QUICK START - ESE 3060 Baseline
+========================================
+
+STEP 1: Launch RunPod
+----------------------
+1. Go to: https://www.runpod.io/
+2. Select: GPU Instances → Deploy
+3. Choose: NVIDIA A100 (40GB or 80GB recommended)
+4. Template: PyTorch
+5. Click: Deploy
+
+STEP 2: Connect & Run
+---------------------
+Once instance is running:
+
+1. Click "Connect" → "Start Jupyter Lab"
+2. Open a Terminal in Jupyter
+3. Run these commands:
+
+cd /workspace
+git clone https://github.com/PakwhanNK/ese-3060-project.git
+cd ese-3060-project
+git checkout exp000-baseline-100runs
+chmod +x runpod_setup.sh
+./runpod_setup.sh
+
+STEP 3: Download Results
+-------------------------
+After ~7 minutes, download results:
+
+zip -r results.zip experiments/exp000-baseline-100runs/
+# Download via Jupyter file browser
+
+OR commit and push:
+
+git add experiments/exp000-baseline-100runs/
+git commit -m "Add baseline results"
+git push origin exp000-baseline-100runs
+
+STEP 4: Stop Instance
+---------------------
+⚠️ IMPORTANT: Stop your instance when done!
+- Click "Stop Pod" to avoid charges
+- Cost: ~$0.05-$0.10 for this experiment
+
+========================================
+Files Generated:
+========================================
+experiments/exp000-baseline-100runs/
+├── metadata.json         # Git, GPU, hyperparameters
+├── runs_detailed.csv     # All 100 runs with seeds
+├── summary.json          # Statistics + 95% CIs ← MAIN RESULTS
+└── results.pt            # PyTorch format
+
+========================================
+Key Statistics in summary.json:
+========================================
+✓ accuracy_mean           - Average accuracy
+✓ accuracy_std            - Standard deviation
+✓ accuracy_ci_95_lower    - 95% CI lower bound
+✓ accuracy_ci_95_upper    - 95% CI upper bound
+✓ success_rate            - % achieving ≥94%
+✓ a100_hours_used         - GPU budget tracking
+
+Expected baseline: ~94.01% ± 0.XX%
+
+========================================
+Need help? See RUNPOD_DEPLOYMENT.md
+========================================
