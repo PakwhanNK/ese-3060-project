@@ -1,5 +1,4 @@
 # NOTE: record from https://github.com/KellerJordan/modded-nanogpt/blob/master/records/track_1_short/2024-10-14_ModernArch/dabaaddd-237c-4ec9-939d-6608a9ed5e27.txt
-====================================================================================================
 import os
 import sys
 with open(sys.argv[0]) as f:
@@ -26,7 +25,7 @@ def zeropower_via_svd(G, steps=None):
 
 @torch.compile
 def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
-    """
+    r"""
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
     of minimizing steps, it turns out to be empirically effective to keep increasing the slope at
@@ -150,19 +149,49 @@ class CausalSelfAttention(nn.Module):
         self.c_proj = nn.Linear(self.n_embd, self.n_embd, bias=False)
         self.c_proj.weight.data.zero_() # zero init suggested by @Grad62304977
         self.rotary = Rotary(self.head_dim)
+        # add 3 lines
+        self.c_q = nn.Linear(self.n_embd, self.n_embd, bias=False)
+        self.c_k = nn.Linear(self.n_embd, self.head_dim, bias=False)  # shared K
+        self.c_v = nn.Linear(self.n_embd, self.head_dim, bias=False)  # shared V
+
 
     def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        B, T, C = x.size()
+        
+        # Q: still multi-head
         q = self.c_q(x).view(B, T, self.n_head, self.head_dim)
-        k = self.c_k(x).view(B, T, self.n_head, self.head_dim)
-        v = self.c_v(x).view(B, T, self.n_head, self.head_dim)
+        
+        # K, V: single head (shared)
+        k = self.c_k(x)  # (B, T, head_dim)
+        v = self.c_v(x)  # (B, T, head_dim)
+        
+        # rotary on Q and K: need 4D
+        q = q  # (B, T, n_head, head_dim)
+        k_rot = k.unsqueeze(2)  # (B, T, 1, head_dim) to reuse Rotary
+        
         cos, sin = self.rotary(q)
-        q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
-        q, k = F.rms_norm(q, (q.size(-1),)), F.rms_norm(k, (k.size(-1),)) # QK norm suggested by @Grad62304977
-        y = F.scaled_dot_product_attention(q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), is_causal=True)
-        y = y.transpose(1, 2).contiguous().view_as(x) # re-assemble all head outputs side by side
+        q = apply_rotary_emb(q, cos, sin)
+        k_rot = apply_rotary_emb(k_rot, cos, sin)
+        
+        # RMS norm
+        q = F.rms_norm(q, (q.size(-1),))
+        k_rot = F.rms_norm(k_rot, (k_rot.size(-1),))
+        
+        # reshape for SDPA
+        q = q.transpose(1, 2)        # (B, n_head, T, head_dim)
+        k = k_rot.transpose(1, 2)    # (B, 1, T, head_dim)
+        v = v.unsqueeze(1)           # (B, 1, T, head_dim)
+        
+        # broadcast K, V across heads
+        k = k.expand(-1, self.n_head, -1, -1)  # (B, n_head, T, head_dim)
+        v = v.expand(-1, self.n_head, -1, -1)
+        
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.c_proj(y)
         return y
+
+
 
 class MLP(nn.Module):
 
@@ -319,13 +348,13 @@ class DistributedDataLoader:
 @dataclass
 class Hyperparameters:
     # data hyperparams
-    input_bin : str = 'data/fineweb10B/fineweb_train_*.bin' # input .bin to train on
-    input_val_bin : str = 'data/fineweb10B/fineweb_val_*.bin' # input .bin to eval validation loss on
+    input_bin : str = '/workspace/fineweb10B/fineweb_train_*.bin'
+    input_val_bin : str = '/workspace/fineweb10B/fineweb_val_*.bin'
     # optimization hyperparams
     batch_size : int = 8*64 # batch size, in sequences, across all devices
     device_batch_size : int = 64 # batch size, in sequences, per device
     sequence_length : int = 1024 # sequence length, in tokens
-    num_iterations : int = 5100 # number of iterations to run
+    num_iterations : int = 100 # number of iterations to run, orig 5100
     learning_rate : float = 0.0036
     warmup_iters : int = 0
     warmdown_iters : int = 1450 # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
