@@ -25,3 +25,6 @@ experiments/
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
+
+# Claude Code
+.claude/
