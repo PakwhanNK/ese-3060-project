@@ -21,7 +21,7 @@ Once instance is running:
 cd /workspace
 git clone https://github.com/PakwhanNK/ese-3060-project.git
 cd ese-3060-project
-git checkout exp000-baseline-100runs
+git checkout experiment/exp000-baseline-100runs
 chmod +x runpod_setup.sh
 ./runpod_setup.sh
 
@@ -36,7 +36,7 @@ OR commit and push:
 
 git add experiments/exp000-baseline-100runs/
 git commit -m "Add baseline results"
-git push origin exp000-baseline-100runs
+git push origin experiment/exp000-baseline-100runs
 
 STEP 4: Stop Instance
 ---------------------

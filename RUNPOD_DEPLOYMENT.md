@@ -31,7 +31,7 @@ git clone https://github.com/PakwhanNK/ese-3060-project.git
 cd ese-3060-project
 
 # Checkout the baseline experiment branch
-git checkout exp000-baseline-100runs
+git checkout experiment/exp000-baseline-100runs
 
 # Make the setup script executable and run it
 chmod +x runpod_setup.sh
@@ -45,7 +45,7 @@ chmod +x runpod_setup.sh
 cd /workspace
 git clone https://github.com/PakwhanNK/ese-3060-project.git
 cd ese-3060-project
-git checkout exp000-baseline-100runs
+git checkout experiment/exp000-baseline-100runs
 
 # Install dependencies
 pip install -r requirements.txt

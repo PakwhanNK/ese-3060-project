@@ -23,14 +23,14 @@ if [ -d "$WORK_DIR" ]; then
     echo "Repository exists. Pulling latest changes..."
     cd "$WORK_DIR"
     git fetch origin
-    git checkout exp000-baseline-100runs
-    git pull origin exp000-baseline-100runs
+    git checkout experiment/exp000-baseline-100runs
+    git pull origin experiment/exp000-baseline-100runs
 else
     echo ""
     echo "Cloning repository..."
     git clone https://github.com/PakwhanNK/ese-3060-project.git "$WORK_DIR"
     cd "$WORK_DIR"
-    git checkout exp000-baseline-100runs
+    git checkout experiment/exp000-baseline-100runs
 fi
 
 # Install dependencies
