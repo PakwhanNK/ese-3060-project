@@ -410,7 +410,7 @@ def main(run):
 
     lr_schedule = triangle(total_train_steps, start=0.2, end=0.07, peak=0.23)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
-                                                  lambda i: lr_schedule[i])
+                                                  lambda i: lr_schedule[min(i, len(lr_schedule) - 1)])
 
     alpha_schedule = 0.95**5 * (torch.arange(total_train_steps+1) / total_train_steps)**3
     lookahead_state = LookaheadState(model)
