@@ -523,7 +523,7 @@ def main(run, lookahead_config=None):
 
     lr_schedule = triangle(total_train_steps, start=0.2, end=0.07, peak=0.23)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
-                                                  lambda i: lr_schedule[i])
+                                                  lambda i: lr_schedule[min(i, len(lr_schedule) - 1)])
 
     # Setup lookahead based on config
     lookahead_state = None
