@@ -45,6 +45,54 @@ Runs 25 training iterations and reports mean/standard deviation accuracy metrics
 ### Reference
 Based on: [cifar10-airbench legacy airbench94.py](https://github.com/KellerJordan/cifar10-airbench/blob/master/legacy/airbench94.py)
 
+## Experiments
+
+### Experiment 410: TTA Weight Optimization
+
+**Branch:** `experiment/exp410-tta-weight-optimization`
+
+**Objective:** Investigate whether modifying the test-time augmentation (TTA) weights can improve classification accuracy beyond the current fixed 50/50 split between untranslated and translated views.
+
+**Background:**
+The current TTA Level 2 implementation uses a fixed weight distribution:
+- Untranslated views (original + flipped): 0.5 total weight (0.25 each)
+- Translated views (4 shifted+flipped versions): 0.5 total weight (0.125 each)
+
+Literature review suggests that optimizing these weights could yield small but significant accuracy improvements.
+
+**Approach:**
+1. **Phase 1:** Train n=25 baseline models with standard hyperparameters
+2. **Phase 2:** For each trained model, evaluate with 8 different TTA weight configurations:
+   - 0.30, 0.35, 0.40, 0.45, 0.50 (baseline), 0.55, 0.60, 0.65, 0.70
+3. **Phase 3:** Statistical analysis with paired t-tests and effect size calculations
+
+**Key Advantage:** Since we only re-evaluate (not retrain), this is extremely efficient:
+- Total evaluations: 25 models × 8 configs = 200 evaluations (~10 minutes on A100)
+- Expected cost: <0.01 A100-hours (negligible)
+
+**Running the Experiment:**
+
+1. Train baseline models and run sweep:
+```bash
+python sweep_tta_weights.py --n_models 25
+```
+
+2. Analyze results:
+```bash
+python analyze_tta_weights.py
+```
+
+3. View outputs in `experiments/exp410-tta-weight-optimization/`:
+   - `comparison_table.txt` - Statistical comparison of all weight configs
+   - `tta_weight_analysis.png` - Visualization plots
+   - `analysis_summary.txt` - Key findings and recommendations
+
+**Expected Deliverables:**
+- Modified `airbench94.py` with parameterized TTA weights
+- Statistical analysis showing if any weight configuration significantly improves accuracy
+- P-values, effect sizes (Cohen's d), and 95% confidence intervals for all configs
+- Recommendations for optimal TTA weight setting
+
 ## Running train_gpt.py
 
 ### Overview
