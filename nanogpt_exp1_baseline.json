@@ -1,0 +1,29 @@
+{
+  "experiment": 1,
+  "version": "baseline",
+  "train_tokens": 10255324043,
+  "train_files": 103,
+  "val_tokens": 100000000,
+  "val_files": 1,
+  "steps": [
+    { "step": 0, "val_loss": 10.826, "train_time_ms": 364 },
+    { "step": 1, "train_loss": 10.826, "train_time_ms": 63281 },
+    { "step": 2, "train_loss": 10.826, "train_time_ms": 67163 },
+    { "step": 3, "train_loss": 10.8259, "train_time_ms": 71057 },
+    { "step": 4, "train_loss": 10.8259, "train_time_ms": 74954 },
+    { "step": 5, "train_loss": 10.8257, "train_time_ms": 78858 },
+    { "step": 6, "train_loss": 10.8257, "train_time_ms": 82758 },
+    { "step": 7, "train_loss": 10.8255, "train_time_ms": 86662 },
+    { "step": 8, "train_loss": 10.8256, "train_time_ms": 90565 },
+    { "step": 9, "train_loss": 10.8255, "train_time_ms": 94476 },
+    { "step": 10, "train_loss": 10.8255, "train_time_ms": 98386 },
+    { "step": 10, "val_loss": 10.8255, "train_time_ms": 0 }
+  ],
+  "derived_metrics": {
+    "step_durations_ms": [3882, 3894, 3897, 3904, 3900, 3904, 3903, 3911, 3910],
+    "mean_step_time_ms": 3890.56,
+    "std_step_time_ms": 10.07,
+    "peak_memory_mib": 33398,
+    "train_loss_step_10": 10.8255
+  }
+}
