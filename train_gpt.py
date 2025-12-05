@@ -95,6 +95,8 @@ class Muon(torch.optim.Optimizer):
                 buf.mul_(momentum).add_(g)
                 if group['nesterov']:
                     g = g.add(buf, alpha=momentum)
+                if g.ndim < 2:
+                    continue
                 if g.size(0) == 3 * g.size(1): # split grouped QKV parameters
                     g = torch.cat([zeropower_backend(g1, steps=group['backend_steps']) for g1 in g.split(g.size(1))])
                     scale = g.size(1)**0.5
@@ -133,6 +135,14 @@ def apply_rotary_emb(x, cos, sin):
     y1 = x1 * cos + x2 * sin
     y2 = x1 * (-sin) + x2 * cos
     return torch.cat([y1, y2], 3).type_as(x)
+
+class DyT(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1))
+
+    def forward(self, x):
+        return torch.tanh(self.alpha * x)
 
 class CausalSelfAttention(nn.Module):
 
@@ -181,12 +191,14 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
+        self.norm1 = DyT(config.n_embd)
+        self.norm2 = DyT(config.n_embd)
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.attn(F.rms_norm(x, (x.size(-1),)))
-        x = x + self.mlp(F.rms_norm(x, (x.size(-1),)))
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
         return x
 
 # -----------------------------------------------------------------------------
@@ -211,6 +223,7 @@ class GPT(nn.Module):
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        self.final_norm = DyT(config.n_embd)
 
     def forward(self, idx, targets=None, return_logits=True):
 
@@ -218,7 +231,7 @@ class GPT(nn.Module):
         x = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         for block in self.transformer.h:
             x = block(x)
-        x = F.rms_norm(x, (x.size(-1),))
+        x = self.final_norm(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -318,13 +331,13 @@ class DistributedDataLoader:
 @dataclass
 class Hyperparameters:
     # data hyperparams
-    input_bin : str = 'fineweb10B/fineweb_train_*.bin' # input .bin to train on
-    input_val_bin : str = 'fineweb10B/fineweb_val_*.bin' # input .bin to eval validation loss on
+    input_bin : str = '/workspace/fineweb10B/fineweb_train_*.bin' # input .bin to train on
+    input_val_bin : str = '/workspace/fineweb10B/fineweb_val_*.bin' # input .bin to eval validation loss on
     # optimization hyperparams
     batch_size : int = 8*64 # batch size, in sequences, across all devices
     device_batch_size : int = 64 # batch size, in sequences, per device
     sequence_length : int = 1024 # sequence length, in tokens
-    num_iterations : int = 5100 # number of iterations to run
+    num_iterations : int = 10 # number of iterations to run
     learning_rate : float = 0.0036
     warmup_iters : int = 0
     warmdown_iters : int = 1450 # number of iterations of linear warmup/warmdown for triangular or trapezoidal schedule
