@@ -45,6 +45,33 @@ Runs 25 training iterations and reports mean/standard deviation accuracy metrics
 ### Reference
 Based on: [cifar10-airbench legacy airbench94.py](https://github.com/KellerJordan/cifar10-airbench/blob/master/legacy/airbench94.py)
 
+## Experiment Standards
+
+All experiments follow standardized interfaces for consistency and reproducibility. See [EXPERIMENT_STANDARDS.md](EXPERIMENT_STANDARDS.md) for complete details.
+
+### Quick Reference
+
+**Type 1: Single-Run Experiments** (exp000, exp100, exp300)
+```bash
+python airbench94.py --exp_name "experiment_name" --description "..." --runs 25
+```
+
+**Type 2: Training Parameter Sweeps** (exp210, exp220, exp230, exp310)
+```bash
+python airbench94.py --sweep_name "sweep_name" --runs_per_config 10
+```
+
+**Type 3: Post-Training Evaluation Sweeps** (exp410)
+```bash
+python sweep_tta_weights.py --n_models 25
+python analyze_tta_weights.py
+```
+
+**Compare Experiments:**
+```bash
+python airbench94.py --compare exp1 exp2 exp3
+```
+
 ## Experiments
 
 ### Experiment 410: TTA Weight Optimization

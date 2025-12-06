@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(python airbench94.py:*)",
+      "Bash(for branch in experiment/exp000-baseline-100runs experiment/exp100-muon-test experiment/exp310-lookahead-param-sweep)",
+      "Bash(do echo '=== Checking $branch ===' git checkout $branch if grep -n 'lambda i: lr_schedule\\[i\\]' airbench94.py)",
+      "Bash(then echo '  ⚠ Found potential issue' sed -i 's/lambda i: lr_schedule\\[i\\]/lambda i: lr_schedule[min(i, len(lr_schedule) - 1)]/g' airbench94.py git diff airbench94.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python sweep_tta_weights.py:*)",
+      "Bash(python analyze_tta_weights.py:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
