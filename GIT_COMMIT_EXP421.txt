@@ -1,0 +1,53 @@
+# ============================================================================
+# GIT COMMANDS TO COMMIT EXPERIMENT 421
+# ============================================================================
+
+# Step 1: Create and checkout new branch for exp421
+git checkout -b experiment/exp421-early-stop-optimal-lr
+
+# Step 2: Add all exp421 files
+git add sweep_early_stop_optimal_lr.py
+git add compare_early_stop_experiments.py
+git add EXP421_README.md
+git add RUNPOD_EXP421_OPTIMAL_LR.txt
+git add GIT_COMMIT_EXP421.txt
+
+# Step 3: Check what will be committed
+git status
+
+# Step 4: Commit with descriptive message
+git commit -m "Add Experiment 421: Early Stopping with Optimal LR Schedule + TTA
+
+- Add sweep_early_stop_optimal_lr.py: tests epochs 9.0-9.9 with optimal LR (end=0.05)
+- Add compare_early_stop_experiments.py: compares baseline vs optimal LR schedules
+- Add EXP421_README.md: documentation
+- Add RUNPOD_EXP421_OPTIMAL_LR.txt: RunPod setup instructions
+
+Hypothesis: Optimal LR schedule (end=0.05) + TTA enables earlier stopping
+than baseline LR schedule (end=0.07)
+
+Objective: Determine if better LR schedule allows training with fewer epochs
+while maintaining ≥94% accuracy with TTA"
+
+# Step 5: Push to GitHub
+git push -u origin experiment/exp421-early-stop-optimal-lr
+
+# ============================================================================
+# ONE-LINER TO COMMIT EVERYTHING
+# ============================================================================
+
+git checkout -b experiment/exp421-early-stop-optimal-lr && git add sweep_early_stop_optimal_lr.py compare_early_stop_experiments.py EXP421_README.md RUNPOD_EXP421_OPTIMAL_LR.txt GIT_COMMIT_EXP421.txt && git commit -m "Add Experiment 421: Early Stopping with Optimal LR + TTA" && git push -u origin experiment/exp421-early-stop-optimal-lr
+
+# ============================================================================
+# TO VERIFY:
+# ============================================================================
+
+# Check commit was successful
+git log -1
+
+# View on GitHub
+# Go to: https://github.com/PakwhanNK/ese-3060-project
+# Switch to branch: experiment/exp421-early-stop-optimal-lr
+# Verify all files are there
+
+# ============================================================================

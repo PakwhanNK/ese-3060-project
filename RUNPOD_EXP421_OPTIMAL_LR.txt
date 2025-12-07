@@ -1,0 +1,206 @@
+# ============================================================================
+# EXPERIMENT 421: EARLY STOPPING WITH OPTIMAL LR SCHEDULE + TTA
+# ============================================================================
+#
+# HYPOTHESIS: Using the OPTIMAL triangular LR schedule (that yields best
+# accuracy without time constraints) + TTA compensation might enable even
+# earlier stopping than baseline LR schedule.
+#
+# LR SCHEDULES TESTED:
+#   Baseline (exp420): start=0.15, peak=0.21, end=0.07
+#   Optimal (exp421):  start=0.15, peak=0.21, end=0.05  ← Best for accuracy
+#
+# APPROACH:
+#   - Test epoch values: 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9
+#   - 25 runs per epoch value = 250 total runs
+#   - Use OPTIMAL LR schedule (end=0.05)
+#   - Track: training time, no-TTA accuracy, TTA accuracy
+#   - Compare to exp420 (baseline LR)
+#
+# OBJECTIVE: Determine if optimal LR allows earlier stopping than baseline LR
+#
+# ============================================================================
+
+# EASIEST WAY - ONE LINE COMMAND
+# ============================================================================
+
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp421-early-stop-optimal-lr && git pull origin experiment/exp421-early-stop-optimal-lr && python sweep_early_stop_optimal_lr.py --runs_per_epoch 25 --lr_end 0.05 && python analyze_early_stopping.py && cd /workspace && zip -r exp421-optimal-lr-results.zip ese-3060-project/experiments/exp421* ese-3060-project/experiments/*early*.csv && echo "" && echo "========================================" && echo "DONE! Download exp421-optimal-lr-results.zip" && echo "========================================" && echo "Check experiments/exp421-early-stop-optimal-lr_comparison.csv"
+
+# ============================================================================
+# ALTERNATIVE: Step-by-Step Commands
+# ============================================================================
+
+# Step 1: Setup
+cd /workspace
+rm -rf ese-3060-project
+git clone https://github.com/PakwhanNK/ese-3060-project.git
+cd ese-3060-project
+pip install -r requirements.txt
+
+# Step 2: Checkout experiment branch
+git checkout experiment/exp421-early-stop-optimal-lr
+git pull origin experiment/exp421-early-stop-optimal-lr
+
+# Step 3: Run the sweep with OPTIMAL LR schedule
+python sweep_early_stop_optimal_lr.py \
+    --runs_per_epoch 25 \
+    --lr_start 0.15 \
+    --lr_peak 0.21 \
+    --lr_end 0.05
+
+# Step 4: Analyze results
+python analyze_early_stopping.py
+
+# Step 5: Compare to baseline LR (if exp420 also ran)
+python compare_early_stop_experiments.py
+
+# Step 6: Package results
+cd /workspace
+zip -r exp421-results.zip ese-3060-project/experiments/exp421* -x "*.pt"
+
+# ============================================================================
+# RUN BOTH EXP420 AND EXP421 FOR COMPARISON
+# ============================================================================
+
+# This runs BOTH baseline and optimal LR schedules, then compares them
+
+cd /workspace && \
+rm -rf ese-3060-project && \
+git clone https://github.com/PakwhanNK/ese-3060-project.git && \
+cd ese-3060-project && \
+pip install -r requirements.txt && \
+echo "=== EXP420: BASELINE LR SCHEDULE ===" && \
+git checkout experiment/exp420-early-stop-tta && \
+python sweep_early_stop_with_tta.py --runs_per_epoch 25 && \
+echo "=== EXP421: OPTIMAL LR SCHEDULE ===" && \
+git stash && \
+git checkout experiment/exp421-early-stop-optimal-lr && \
+python sweep_early_stop_optimal_lr.py --runs_per_epoch 25 && \
+echo "=== COMPARING RESULTS ===" && \
+python compare_early_stop_experiments.py && \
+cd /workspace && \
+zip -r early-stop-comparison.zip ese-3060-project/experiments/exp42* -x "*.pt" && \
+echo "DONE! Download early-stop-comparison.zip"
+
+# ============================================================================
+# WHAT THIS EXPERIMENT DOES:
+# ============================================================================
+#
+# For each epoch value (9.0, 9.1, ..., 9.9):
+#   1. Train 25 models with OPTIMAL LR schedule (end=0.05)
+#   2. Evaluate without TTA (to see raw accuracy)
+#   3. Evaluate with TTA (to see boosted accuracy)
+#   4. Record training time
+#
+# Then finds:
+#   - Minimum epochs needed to achieve ≥94% with TTA (using optimal LR)
+#   - Time savings vs 9.9 epochs
+#   - Comparison to baseline LR schedule (exp420)
+#
+# ============================================================================
+# EXPECTED RUNTIME:
+# ============================================================================
+#
+# - 10 epoch values × 25 runs = 250 total runs
+# - Average time per run: ~3.5-3.8s (varies by epoch count)
+# - Total experiment time: ~15-20 minutes on A100
+#
+# If running BOTH exp420 and exp421:
+#   - Total: 500 runs
+#   - Time: ~30-40 minutes on A100
+#
+# ============================================================================
+# KEY OUTPUT FILES:
+# ============================================================================
+#
+# 1. experiments/exp421-early-stop-optimal-lr_comparison.csv
+#    - Results for all epoch values with optimal LR
+#
+# 2. experiments/early_stop_lr_comparison.csv (if both exp420/421 ran)
+#    - Side-by-side comparison of baseline vs optimal LR
+#
+# 3. experiments/exp421-early-stop-optimal-lr_epochXX/
+#    - Individual experiment folder for each epoch value
+#    - Contains: summary.json, runs.csv, results.json
+#
+# ============================================================================
+# INTERPRETING RESULTS:
+# ============================================================================
+#
+# SUCCESS SCENARIO:
+#   Optimal LR allows stopping at 9.2 epochs, baseline requires 9.5:
+#   - Epoch reduction: 0.3 epochs better with optimal LR
+#   - Conclusion: Better LR schedule enables earlier stopping!
+#
+# NEUTRAL SCENARIO:
+#   Both schedules stop at same epoch (e.g., 9.4):
+#   - Optimal LR may still achieve higher accuracy at same epochs
+#   - Or: LR end value doesn't significantly impact early stopping
+#
+# UNEXPECTED SCENARIO:
+#   Baseline LR allows earlier stopping than optimal:
+#   - Suggests end=0.07 might be better for this specific use case
+#   - Worth investigating why
+#
+# ============================================================================
+# COMPARISON METRICS:
+# ============================================================================
+#
+# When comparing exp420 (baseline) vs exp421 (optimal):
+#
+# 1. Minimum Epochs:
+#    - Which schedule allows earliest stopping?
+#    - Difference in epochs required
+#
+# 2. Accuracy at Minimum:
+#    - Which achieves higher accuracy at its minimum epoch?
+#    - Accuracy difference
+#
+# 3. Time at Minimum:
+#    - Which is faster at achieving ≥94%?
+#    - Time savings
+#
+# 4. Success Rate:
+#    - Which is more reliable (higher % of runs achieving ≥94%)?
+#
+# 5. Accuracy Curve:
+#    - How does accuracy change across epochs for each schedule?
+#    - Is one more stable?
+#
+# ============================================================================
+# AFTER EXPERIMENT COMPLETES:
+# ============================================================================
+#
+# Download and check:
+# 1. exp421-early-stop-optimal-lr_comparison.csv - Main results
+# 2. early_stop_lr_comparison.csv - Comparison if both ran
+# 3. Look for "HEAD-TO-HEAD COMPARISON" in compare output
+# 4. Check winner and magnitude of difference
+#
+# If optimal LR enables earlier stopping:
+#   → Use both optimal LR (end=0.05) + fewer epochs in production!
+#
+# If baseline LR is better or equal:
+#   → Stick with baseline LR (end=0.07)
+#   → Document that end LR value doesn't help early stopping
+#
+# ============================================================================
+# COMBINING WITH OTHER EXPERIMENTS:
+# ============================================================================
+#
+# If you've also run exp410 (TTA weight optimization):
+#
+# # Use optimal TTA weight from exp410
+# python sweep_early_stop_optimal_lr.py \
+#     --runs_per_epoch 25 \
+#     --lr_end 0.05 \
+#     --tta_weight 0.55  # Or whatever exp410 found best
+#
+# This tests the FULL STACK optimization:
+#   - Optimal LR schedule (end=0.05)
+#   - Optimal TTA weight (from exp410)
+#   - Early stopping (reduced epochs)
+#
+# Potential maximum speedup!
+#
+# ============================================================================
