@@ -1,0 +1,71 @@
+# ============================================================================
+# GIT COMMANDS TO COMMIT EXPERIMENT 420
+# ============================================================================
+
+# Step 1: Create and checkout new branch for exp420
+git checkout -b experiment/exp420-early-stop-tta
+
+# Step 2: Add all exp420 files
+git add sweep_early_stop_with_tta.py
+git add analyze_early_stopping.py
+git add EXP420_README.md
+git add RUNPOD_EXP420_EARLY_STOPPING.txt
+git add EXPERIMENTS_SUMMARY.md
+git add GIT_COMMIT_EXP420.txt
+
+# Step 3: Check what will be committed
+git status
+
+# Step 4: Commit with descriptive message
+git commit -m "Add Experiment 420: Early Stopping with TTA Compensation
+
+- Add sweep_early_stop_with_tta.py: tests epochs 9.0-9.9 with TTA
+- Add analyze_early_stopping.py: finds minimum epochs for ≥94% accuracy
+- Add EXP420_README.md: comprehensive documentation
+- Add RUNPOD_EXP420_EARLY_STOPPING.txt: RunPod setup instructions
+- Add EXPERIMENTS_SUMMARY.md: overview of all three experiments
+
+Hypothesis: TTA boost allows training for fewer epochs while maintaining
+≥94% accuracy, reducing training time.
+
+Objective: Find minimum epochs needed to achieve ≥94% with TTA evaluation"
+
+# Step 5: Push to GitHub
+git push -u origin experiment/exp420-early-stop-tta
+
+# ============================================================================
+# ALTERNATIVE: If you want to add to existing exp410 branch instead
+# ============================================================================
+
+git checkout experiment/exp410-tta-weight-optimization
+
+# Add just the early stopping files
+git add sweep_early_stop_with_tta.py
+git add analyze_early_stopping.py
+git add EXP420_README.md
+git add RUNPOD_EXP420_EARLY_STOPPING.txt
+git add EXPERIMENTS_SUMMARY.md
+
+git commit -m "Add exp420 early stopping experiment to test TTA compensation"
+
+git push origin experiment/exp410-tta-weight-optimization
+
+# ============================================================================
+# ALTERNATIVE: One-liner to commit everything to new branch
+# ============================================================================
+
+git checkout -b experiment/exp420-early-stop-tta && git add sweep_early_stop_with_tta.py analyze_early_stopping.py EXP420_README.md RUNPOD_EXP420_EARLY_STOPPING.txt EXPERIMENTS_SUMMARY.md GIT_COMMIT_EXP420.txt && git commit -m "Add Experiment 420: Early Stopping with TTA Compensation" && git push -u origin experiment/exp420-early-stop-tta
+
+# ============================================================================
+# TO VERIFY:
+# ============================================================================
+
+# Check commit was successful
+git log -1
+
+# View on GitHub
+# Go to: https://github.com/PakwhanNK/ese-3060-project
+# Switch to branch: experiment/exp420-early-stop-tta
+# Verify all files are there
+
+# ============================================================================
