@@ -333,7 +333,7 @@ def infer(model, loader, tta_level=0):
         logits_translate_list = [infer_mirror(inputs_translate, net)
                                  for inputs_translate in inputs_translate_list]
         logits_translate = torch.stack(logits_translate_list).mean(0)
-        return 0.5 * logits + 0.5 * logits_translate
+        return 0.3 * logits + 0.7 * logits_translate
 
     model.eval()
     test_images = loader.normalize(loader.images)
@@ -408,7 +408,7 @@ def main(run):
         indices = torch.clamp(indices, 0, len(m) - 1)
         return m[indices] * x + b[indices]
 
-    lr_schedule = triangle(total_train_steps, start=0.2, end=0.07, peak=0.23)
+    lr_schedule = triangle(total_train_steps, start=0.2, end=0.05, peak=0.23)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
                                                   lambda i: lr_schedule[i])
 
