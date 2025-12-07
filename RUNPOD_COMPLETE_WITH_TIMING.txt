@@ -1,0 +1,131 @@
+# ============================================================================
+# COMPLETE RUNPOD SETUP FOR EXPERIMENTS 310 & 410 (WITH TIME TRACKING)
+# ============================================================================
+#
+# EXPERIMENT 310: Lookahead Parameter Sweep
+#   - Tests 9 lookahead configurations
+#   - 25 runs per config = 225 total runs
+#   - Time tracked automatically
+#
+# EXPERIMENT 410: TTA Weight Optimization (TIME-FOCUSED)
+#   - Tests 9 TTA weights (0.30 to 0.70)
+#   - 25 models × 9 weights = 225 evaluations
+#   - Tracks: Training time + Eval time
+#   - OBJECTIVE: Find TTA weight achieving ≥94% accuracy in minimum time
+#
+# ============================================================================
+
+# STEP 1: Setup and run Experiment 310
+# ============================================================================
+
+cd /workspace && \
+rm -rf ese-3060-project && \
+git clone https://github.com/PakwhanNK/ese-3060-project.git && \
+cd ese-3060-project && \
+pip install -r requirements.txt && \
+echo "Starting Experiment 310 (Lookahead Sweep)..." && \
+git checkout experiment/exp310-lookahead-param-sweep && \
+sed -i 's/get_summary_stats()/compute_statistics()/g' airbench94.py && \
+sed -i "s/\['mean_accuracy'\]/['accuracy_mean']/g" airbench94.py && \
+sed -i "s/\['std_accuracy'\]/['accuracy_std']/g" airbench94.py && \
+sed -i "s/\['mean_time'\]/['time_mean']/g" airbench94.py && \
+sed -i "s/\['std_time'\]/['time_std']/g" airbench94.py && \
+python airbench94.py --exp_name exp310-lookahead-param-sweep --desc "Lookahead sweep" --runs 25 --sweep && \
+echo "✓ Experiment 310 complete!" && \
+echo ""
+
+# ============================================================================
+# STEP 2: Setup and run Experiment 410 (WITH TIME TRACKING)
+# ============================================================================
+
+cd /workspace/ese-3060-project && \
+git stash && \
+echo "Starting Experiment 410 (TTA Weight Optimization with Time Tracking)..." && \
+git checkout experiment/exp410-tta-weight-optimization && \
+git pull origin experiment/exp410-tta-weight-optimization && \
+echo ""
+
+# Check if time-tracking script exists
+if [ -f "sweep_tta_weights_with_timing.py" ]; then
+    echo "Using time-tracking sweep script..."
+    python sweep_tta_weights_with_timing.py --n_models 25
+else
+    echo "Time-tracking script not found, using standard sweep..."
+    python sweep_tta_weights.py --n_models 25
+fi
+
+echo "✓ Experiment 410 complete!" && \
+echo ""
+
+# ============================================================================
+# STEP 3: Run Analysis Scripts
+# ============================================================================
+
+echo "Running analysis..." && \
+cd /workspace/ese-3060-project && \
+git checkout main 2>/dev/null || git checkout master 2>/dev/null || true && \
+echo ""
+
+# Run time-accuracy tradeoff analysis if available
+if [ -f "analyze_tta_time_tradeoff.py" ]; then
+    echo "Analyzing TTA time-accuracy tradeoff..."
+    python analyze_tta_time_tradeoff.py
+fi
+
+# Run general comparisons
+if [ -f "compare_experiments.py" ]; then
+    echo "Running general experiment comparison..."
+    python compare_experiments.py
+fi
+
+if [ -f "simple_tta_analysis.py" ]; then
+    echo "Running simple TTA analysis..."
+    python simple_tta_analysis.py
+fi
+
+if [ -f "simple_lookahead_analysis.py" ]; then
+    echo "Running lookahead analysis..."
+    python simple_lookahead_analysis.py
+fi
+
+echo ""
+
+# ============================================================================
+# STEP 4: Package Results
+# ============================================================================
+
+echo "Packaging results..." && \
+cd /workspace && \
+zip -r experiments-results-with-timing.zip \
+    ese-3060-project/experiments/ \
+    -x "*.pt" "*/checkpoints/*" && \
+echo ""
+
+# ============================================================================
+# FINAL SUMMARY
+# ============================================================================
+
+echo "============================================================================"
+echo "ALL EXPERIMENTS COMPLETE!"
+echo "============================================================================"
+echo ""
+echo "RESULTS:"
+echo "  - Experiment 310: Lookahead parameter sweep results"
+echo "  - Experiment 410: TTA weight optimization (with time tracking)"
+echo ""
+echo "KEY FILES:"
+echo "  - experiments/comparison.csv - All experiments compared"
+echo "  - experiments/tta_time_accuracy_tradeoff.csv - TTA time vs accuracy"
+echo "  - experiments/lookahead_comparison.csv - Lookahead configs compared"
+echo ""
+echo "DOWNLOAD:"
+echo "  - Archive: /workspace/experiments-results-with-timing.zip"
+echo "  - Via RunPod file browser or scp"
+echo ""
+echo "EXPERIMENT 410 OBJECTIVE:"
+echo "  Find TTA weight configuration that:"
+echo "    1. Achieves ≥94% mean accuracy"
+echo "    2. Minimizes total time (training + evaluation)"
+echo ""
+echo "Check tta_time_accuracy_tradeoff.csv for recommendations!"
+echo "============================================================================"

@@ -1,0 +1,34 @@
+# ============================================================================
+# EASIEST WAY TO RUN - ONE LINE COMMAND (WITH TIME TRACKING FOR EXP410)
+# ============================================================================
+#
+# Copy and paste this ENTIRE block into RunPod terminal:
+# ============================================================================
+
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp310-lookahead-param-sweep && sed -i 's/get_summary_stats()/compute_statistics()/g' airbench94.py && sed -i "s/\['mean_accuracy'\]/['accuracy_mean']/g" airbench94.py && sed -i "s/\['std_accuracy'\]/['accuracy_std']/g" airbench94.py && sed -i "s/\['mean_time'\]/['time_mean']/g" airbench94.py && sed -i "s/\['std_time'\]/['time_std']/g" airbench94.py && python airbench94.py --exp_name exp310-lookahead-param-sweep --desc "Lookahead sweep" --runs 25 --sweep && git stash && git checkout experiment/exp410-tta-weight-optimization && (python sweep_tta_weights_with_timing.py --n_models 25 || python sweep_tta_weights.py --n_models 25) && git checkout main && python analyze_tta_time_tradeoff.py 2>/dev/null || python simple_tta_analysis.py && python compare_experiments.py && cd /workspace && zip -r results-with-timing.zip ese-3060-project/experiments/ -x "*.pt" "*/checkpoints/*" && echo "" && echo "DONE! Download results-with-timing.zip from /workspace/" && echo "Check experiments/tta_time_accuracy_tradeoff.csv for TTA timing analysis!"
+
+# ============================================================================
+# WHAT THIS DOES:
+# ============================================================================
+# 1. Runs Experiment 310 (Lookahead sweep) - ~10 minutes
+# 2. Runs Experiment 410 (TTA weight optimization WITH TIME TRACKING) - ~15 min
+# 3. Analyzes time-accuracy tradeoff for TTA weights
+# 4. Creates comparison CSVs
+# 5. Zips everything for download
+#
+# TOTAL TIME: ~25-30 minutes
+#
+# IMPORTANT: Experiment 410 now tracks:
+#   - Training time for each model
+#   - Evaluation time for each TTA weight
+#   - Total time = training + eval
+#
+# OBJECTIVE: Find TTA weight that achieves ≥94% accuracy in MINIMUM TIME
+# ============================================================================
+
+# ============================================================================
+# ALTERNATIVE: Run only Experiment 410 with time tracking
+# ============================================================================
+# If you only want to run the TTA optimization experiment:
+
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp410-tta-weight-optimization && (python sweep_tta_weights_with_timing.py --n_models 25 || python sweep_tta_weights.py --n_models 25) && git checkout main && python analyze_tta_time_tradeoff.py 2>/dev/null || python simple_tta_analysis.py && cd /workspace && zip -r exp410-timing-results.zip ese-3060-project/experiments/exp410* ese-3060-project/experiments/*tta*.csv -x "*.pt" && echo "DONE! Download exp410-timing-results.zip"
