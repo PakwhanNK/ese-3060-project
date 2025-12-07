@@ -333,7 +333,7 @@ def infer(model, loader, tta_level=0):
         logits_translate_list = [infer_mirror(inputs_translate, net)
                                  for inputs_translate in inputs_translate_list]
         logits_translate = torch.stack(logits_translate_list).mean(0)
-        return 0.3 * logits + 0.7 * logits_translate
+        return 0.5 * logits + 0.5 * logits_translate
 
     model.eval()
     test_images = loader.normalize(loader.images)
