@@ -39,7 +39,7 @@ torch.backends.cudnn.benchmark = True
 
 hyp = {
     'opt': {
-        'train_epochs': 9.9,
+        'train_epochs': 9.7,
         'batch_size': 1024,
         'lr': 11.5,                 # learning rate per 1024 examples
         'momentum': 0.85,
@@ -333,7 +333,7 @@ def infer(model, loader, tta_level=0):
         logits_translate_list = [infer_mirror(inputs_translate, net)
                                  for inputs_translate in inputs_translate_list]
         logits_translate = torch.stack(logits_translate_list).mean(0)
-        return 0.5 * logits + 0.5 * logits_translate
+        return 0.3 * logits + 0.7 * logits_translate
 
     model.eval()
     test_images = loader.normalize(loader.images)
@@ -498,7 +498,7 @@ if __name__ == "__main__":
                         help='Experiment name')
     parser.add_argument('--desc', type=str, default='',
                         help='Experiment description')
-    parser.add_argument('--runs', type=int, default=25,
+    parser.add_argument('--runs', type=int, default=100,
                         help='Number of runs')
     parser.add_argument('--compare', nargs='+', default=None,
                         help='Compare experiments')
