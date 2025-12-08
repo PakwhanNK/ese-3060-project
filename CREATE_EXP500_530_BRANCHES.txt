@@ -1,0 +1,198 @@
+================================================================================
+CLEAN SETUP FOR EXPERIMENTS 500-530
+================================================================================
+
+For each experiment, you only need to modify airbench94.py in a new branch.
+All other files (experiment_logger.py, requirements.txt, etc.) stay the same.
+
+================================================================================
+EXPERIMENT 500: BASELINE
+================================================================================
+
+Branch: experiment/exp500-baseline-50pct
+LR: start=0.20, peak=0.23, end=0.07
+TTA: 0.5/0.5
+
+CHANGES TO airbench94.py:
+
+Line 419-420:
+    fixed_peak = 0.23     # Changed from 0.21
+    fixed_start = 0.20     # Changed from 0.15
+
+Line ~520 (in main function, where main() is called):
+    Change: main(run_id, end=0.07)  # Make sure end=0.07
+
+Line ~312 (in evaluate() calls):
+    Keep: untrans_weight=0.5 (this should be default)
+
+Line ~580-end (argparse section):
+REPLACE entire if __name__ == "__main__": section with:
+
+if __name__ == "__main__":
+    import argparse
+    import numpy as np
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--runs', type=int, default=25)
+    parser.add_argument('--epoch_start', type=float, default=9.0)
+    parser.add_argument('--epoch_end', type=float, default=9.9)
+    parser.add_argument('--epoch_step', type=float, default=0.1)
+    args = parser.parse_args()
+
+    epochs = np.arange(args.epoch_start, args.epoch_end + args.epoch_step/2, args.epoch_step)
+    epochs = [round(e, 1) for e in epochs]
+
+    print("EXP500: LR(0.20/0.23/0.07), TTA(0.5/0.5)")
+    print(f"Epochs: {epochs}")
+
+    for ep in epochs:
+        print(f"\n{ep} epochs:")
+        hyp['opt']['train_epochs'] = ep
+        logger = ExperimentLogger(f"exp500_ep{int(ep*10):02d}", f"Exp500 {ep}ep", hyp)
+        accs = []
+        for r in range(args.runs):
+            torch.manual_seed(42 + r)
+            torch.cuda.manual_seed_all(42 + r)
+            acc, t, _ = main(r, end=0.07)
+            accs.append(acc)
+            logger.log_run(r, acc, t, ep)
+        logger.save_summary()
+        sr = sum(1 for a in accs if a >= 0.94) / len(accs)
+        print(f"  {sr:.1%} {'✓' if sr >= 0.50 else '✗'}")
+
+GIT COMMANDS:
+git checkout main
+git checkout -b experiment/exp500-baseline-50pct
+# Apply changes above to airbench94.py
+git add airbench94.py
+git commit -m "Exp500: Baseline LR+TTA, 50% threshold"
+git push -u origin experiment/exp500-baseline-50pct
+
+RUN:
+python airbench94.py --runs 25
+
+================================================================================
+EXPERIMENT 510: OPTIMAL LR
+================================================================================
+
+Branch: experiment/exp510-optimal-lr
+LR: start=0.15, peak=0.21, end=0.05
+TTA: 0.5/0.5
+
+CHANGES TO airbench94.py:
+
+Line 419-420:
+    fixed_peak = 0.21     # Keep as is
+    fixed_start = 0.15     # Keep as is
+
+Line ~520:
+    main(run_id, end=0.05)  # Changed from 0.07
+
+Line ~312:
+    untrans_weight=0.5 (keep default)
+
+Line ~580-end (argparse section):
+SAME as Exp500 but change:
+- "EXP500" to "EXP510"
+- "LR(0.20/0.23/0.07)" to "LR(0.15/0.21/0.05)"
+- "exp500" to "exp510"
+- main(r, end=0.07) to main(r, end=0.05)
+
+GIT COMMANDS:
+git checkout main
+git checkout -b experiment/exp510-optimal-lr
+# Apply changes above
+git add airbench94.py
+git commit -m "Exp510: Optimal LR, 50% threshold"
+git push -u origin experiment/exp510-optimal-lr
+
+RUN:
+python airbench94.py --runs 25
+
+================================================================================
+EXPERIMENT 520: OPTIMAL TTA
+================================================================================
+
+Branch: experiment/exp520-optimal-tta
+LR: start=0.20, peak=0.23, end=0.07
+TTA: 0.3/0.7
+
+CHANGES TO airbench94.py:
+
+Line 419-420:
+    fixed_peak = 0.23     # Changed from 0.21
+    fixed_start = 0.20     # Changed from 0.15
+
+Line ~520:
+    main(run_id, end=0.07)
+
+Line ~312 (ALL evaluate calls in main function):
+    Change: untrans_weight=0.3  # Changed from 0.5
+
+Line ~580-end:
+SAME as Exp500 but change:
+- "EXP500" to "EXP520"
+- "TTA(0.5/0.5)" to "TTA(0.3/0.7)"
+- "exp500" to "exp520"
+
+GIT COMMANDS:
+git checkout main
+git checkout -b experiment/exp520-optimal-tta
+# Apply changes above
+git add airbench94.py
+git commit -m "Exp520: Optimal TTA, 50% threshold"
+git push -u origin experiment/exp520-optimal-tta
+
+RUN:
+python airbench94.py --runs 25
+
+================================================================================
+EXPERIMENT 530: BOTH OPTIMAL
+================================================================================
+
+Branch: experiment/exp530-optimal-both
+LR: start=0.15, peak=0.21, end=0.05
+TTA: 0.3/0.7
+
+CHANGES TO airbench94.py:
+
+Line 419-420:
+    fixed_peak = 0.21     # Keep as is
+    fixed_start = 0.15     # Keep as is
+
+Line ~520:
+    main(run_id, end=0.05)
+
+Line ~312:
+    untrans_weight=0.3
+
+Line ~580-end:
+SAME as Exp500 but change:
+- "EXP500" to "EXP530"
+- "LR(0.20/0.23/0.07)" to "LR(0.15/0.21/0.05)"
+- "TTA(0.5/0.5)" to "TTA(0.3/0.7)"
+- "exp500" to "exp530"
+- main(r, end=0.07) to main(r, end=0.05)
+
+GIT COMMANDS:
+git checkout main
+git checkout -b experiment/exp530-optimal-both
+# Apply changes above
+git add airbench94.py
+git commit -m "Exp530: Optimal LR+TTA, 50% threshold"
+git push -u origin experiment/exp530-optimal-both
+
+RUN:
+python airbench94.py --runs 25
+
+================================================================================
+SUMMARY OF CHANGES PER EXPERIMENT
+================================================================================
+
+               | fixed_start | fixed_peak | end  | untrans_weight |
+Exp500         | 0.20        | 0.23       | 0.07 | 0.5            |
+Exp510         | 0.15        | 0.21       | 0.05 | 0.5            |
+Exp520         | 0.20        | 0.23       | 0.07 | 0.3            |
+Exp530         | 0.15        | 0.21       | 0.05 | 0.3            |
+
+================================================================================

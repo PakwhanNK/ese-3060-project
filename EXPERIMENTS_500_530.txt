@@ -1,0 +1,140 @@
+================================================================================
+EXPERIMENTS 500-530: CLEAN BRANCH SETUP
+================================================================================
+
+TTA WEIGHTS BRANCH: experiment/exp410-tta-weight-optimization
+
+GOAL: Test 50% success rate (≥94% accuracy) at different epochs
+
+BASELINE: LR(0.20/0.23/0.07), TTA 0.5/0.5
+
+EXPERIMENTS:
+  500: Baseline LR + Baseline TTA
+  510: Optimal LR + Baseline TTA
+  520: Baseline LR + Optimal TTA
+  530: Optimal LR + Optimal TTA
+
+================================================================================
+PARAMETERS
+================================================================================
+
+| Exp | LR start | LR peak | LR end | TTA weight |
+|-----|----------|---------|--------|------------|
+| 500 | 0.20     | 0.23    | 0.07   | 0.5        |
+| 510 | 0.15     | 0.21    | 0.05   | 0.5        |
+| 520 | 0.20     | 0.23    | 0.07   | 0.3        |
+| 530 | 0.15     | 0.21    | 0.05   | 0.3        |
+
+================================================================================
+SETUP (For each experiment)
+================================================================================
+
+1. Create branch from main
+2. Modify airbench94.py ONLY:
+   - Line ~419-420: fixed_start, fixed_peak
+   - Line ~312: untrans_weight in evaluate() calls
+   - Line ~520: end parameter in main() call
+   - Line ~580-end: Update argparse section (see below)
+3. Commit and push
+
+================================================================================
+ARGPARSE SECTION (Replace entire if __name__ == "__main__": at end of file)
+================================================================================
+
+if __name__ == "__main__":
+    import argparse
+    import numpy as np
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--runs', type=int, default=25)
+    parser.add_argument('--epoch_start', type=float, default=9.0)
+    parser.add_argument('--epoch_end', type=float, default=9.9)
+    parser.add_argument('--epoch_step', type=float, default=0.1)
+    args = parser.parse_args()
+
+    epochs = np.arange(args.epoch_start, args.epoch_end + args.epoch_step/2, args.epoch_step)
+    epochs = [round(e, 1) for e in epochs]
+
+    # Change EXP_NUM and params for each experiment
+    print("EXP_NUM: LR(...), TTA(...)")
+    print(f"Testing epochs: {epochs}")
+
+    for ep in epochs:
+        hyp['opt']['train_epochs'] = ep
+        logger = ExperimentLogger(f"expNUM_ep{int(ep*10):02d}", f"ExpNUM {ep}ep", hyp)
+        accs = []
+        for r in range(args.runs):
+            torch.manual_seed(42 + r)
+            torch.cuda.manual_seed_all(42 + r)
+            acc, t, _ = main(r, end=END_VALUE)  # Set END_VALUE per exp
+            accs.append(acc)
+            logger.log_run(r, acc, t, ep)
+        logger.save_summary()
+        sr = sum(1 for a in accs if a >= 0.94) / len(accs)
+        print(f"{ep:.1f}ep: {sr:.1%} {'✓' if sr >= 0.50 else '✗'}")
+
+================================================================================
+SPECIFIC CHANGES PER EXPERIMENT
+================================================================================
+
+EXP500:
+  Line 419: fixed_peak = 0.23
+  Line 420: fixed_start = 0.20
+  Line 312: untrans_weight=0.5 (default)
+  Line 520: main(r, end=0.07)
+  Argparse: EXP500, expNUM->exp500, END_VALUE->0.07
+
+EXP510:
+  Line 419: fixed_peak = 0.21
+  Line 420: fixed_start = 0.15
+  Line 312: untrans_weight=0.5
+  Line 520: main(r, end=0.05)
+  Argparse: EXP510, expNUM->exp510, END_VALUE->0.05
+
+EXP520:
+  Line 419: fixed_peak = 0.23
+  Line 420: fixed_start = 0.20
+  Line 312: untrans_weight=0.3
+  Line 520: main(r, end=0.07)
+  Argparse: EXP520, expNUM->exp520, END_VALUE->0.07
+
+EXP530:
+  Line 419: fixed_peak = 0.21
+  Line 420: fixed_start = 0.15
+  Line 312: untrans_weight=0.3
+  Line 520: main(r, end=0.05)
+  Argparse: EXP530, expNUM->exp530, END_VALUE->0.05
+
+================================================================================
+GIT WORKFLOW
+================================================================================
+
+# Exp500
+git checkout main && git pull
+git checkout -b experiment/exp500-baseline-50pct
+# Apply changes above
+git add airbench94.py
+git commit -m "Exp500: baseline LR+TTA"
+git push -u origin experiment/exp500-baseline-50pct
+
+# Repeat for exp510, exp520, exp530
+
+================================================================================
+RUN ON RUNPOD
+================================================================================
+
+Exp500:
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp500-baseline-50pct && python airbench94.py --runs 25
+
+Exp510:
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp510-optimal-lr && python airbench94.py --runs 25
+
+Exp520:
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp520-optimal-tta && python airbench94.py --runs 25
+
+Exp530:
+cd /workspace && rm -rf ese-3060-project && git clone https://github.com/PakwhanNK/ese-3060-project.git && cd ese-3060-project && pip install -r requirements.txt && git checkout experiment/exp530-optimal-both && python airbench94.py --runs 25
+
+================================================================================
+RUNTIME: ~15-20 min per experiment, ~60-70 min total
+================================================================================
