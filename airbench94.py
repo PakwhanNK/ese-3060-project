@@ -404,8 +404,8 @@ def main(run, end):
         return m[indices] * x + b[indices]
 
     # fixed start / end, variable peak
-    fixed_peak = 0.21  # best performance peak LR
-    fixed_start = 0.15  # best performance start LR
+    fixed_peak = 0.23  # baseline peak LR
+    fixed_start = 0.20  # baseline start LR
 
     lr_schedule = triangle(
         total_train_steps,
